@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package notificaciones;
+
+
+service NotificacionesService {
+  // Trigger: registro exitoso de alumno
+    rpc SendBienvenida (BienvenidaRequest) returns (NotificacionResponse);
+
+  // Trigger: alumno se da de baja de la materia
+    rpc SendBajaNotif (BajaRequest) returns (NotificacionResponse);
+
+  // Trigger: cierre de materia y publicación de calificaciones
+    rpc SendCierreMateria (CierreMateriaRequest) returns (NotificacionResponse);
+}
+
+// Payloads:
+message BienvenidaRequest {
+    string alumnoId = 1;
+    string materiaId = 2;
+}
+
+message BajaRequest {
+    string alumnoId = 1;
+    string docenteId = 2;
+}
+
+message CierreMateriaRequest {
+    string materiaId = 1;
+}
+
+// Respuesta base
+message NotificacionResponse {
+    bool success = 1;
+    string error_message = 2; 
+}
