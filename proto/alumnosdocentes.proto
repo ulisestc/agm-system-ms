@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package alumnos;
+
+service DocentesAlumnosService {
+  // pdf
+    rpc GetAlumnoById (IdRequest) returns (AlumnoInfo);
+    rpc GetAlumnosByMateria (MateriaIdRequest) returns (AlumnosListResponse);
+    
+  // agregado para notificaciones
+    rpc GetDocenteById (IdRequest) returns (DocenteInfo);
+}
+
+// --- Payloads (in)---
+
+// mensaje común
+message IdRequest {
+    string id = 1;
+}
+
+message MateriaIdRequest {
+    string materiaId = 1;
+}
+
+// --- Payloads (out) ---
+
+message AlumnoInfo {
+    string id = 1;
+    string nombre = 2;
+    string email = 3;
+}
+
+message DocenteInfo {
+    string id = 1;
+    string nombre = 2;
+    string email = 3;
+}
+
+// lista de alumnos para una materia
+message AlumnosListResponse {
+    repeated AlumnoInfo alumnos = 1; 
+}

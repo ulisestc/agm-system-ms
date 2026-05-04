@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package materias;
+
+service PeriodosMateriasService {
+    rpc GetMateriaById (MateriaIdRequest) returns (MateriaInfo);
+}
+
+message MateriaIdRequest {
+    string id = 1;
+}
+
+message MateriaInfo {
+    string id = 1;
+    string nombre = 2;
+    string nrc = 3; 
+}
