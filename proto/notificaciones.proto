@@ -12,6 +12,9 @@ service NotificacionesService {
 
   // Trigger: cierre de materia y publicación de calificaciones
     rpc SendCierreMateria (CierreMateriaRequest) returns (NotificacionResponse);
+
+    // Trigger: solicitud de restablecimiento de contraseña
+    rpc SendResetPassword (ResetPasswordRequest) returns (NotificacionResponse);
 }
 
 // Payloads:
@@ -27,6 +30,11 @@ message BajaRequest {
 
 message CierreMateriaRequest {
     string materiaId = 1;
+}
+
+message ResetPasswordRequest {
+  string email = 1;
+  string token = 2;
 }
 
 // Respuesta base
