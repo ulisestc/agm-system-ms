@@ -1,4 +1,9 @@
 from fastapi import FastAPI
+# Agregamos las importaciones de la base de datos y modelos
+from database import engine, Base
+import models
+
+Base.metadata.create_all(bind=engine)
 
 # Inicializamos la aplicación FastAPI
 app = FastAPI(
@@ -7,7 +12,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Creamos nuestro primer endpoint de prueba
+# Creamos el primer endpoint de prueba
 @app.get("/")
 def read_root():
-    return {"mensaje": "El microservicio de Auth está corriendo"}
+    return {"mensaje": "¡El microservicio de Auth está corriendo!"}
