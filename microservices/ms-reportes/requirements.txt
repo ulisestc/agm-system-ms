@@ -1,0 +1,21 @@
+# Framework y servidor
+fastapi==0.115.0
+uvicorn==0.30.6
+
+# Base de datos 
+SQLAlchemy==2.0.35
+psycopg2-binary==2.9.9
+
+# Validación de datos 
+pydantic==2.9.2
+
+# Generación de archivos 
+openpyxl==3.1.5        # Excel
+reportlab==4.2.2       # PDF
+
+# gRPC 
+grpcio==1.66.2
+grpcio-tools==1.66.2   
+
+# Variables de entorno 
+python-dotenv==1.0.1
