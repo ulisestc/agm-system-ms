@@ -1,8 +1,31 @@
-# Placeholder Dockerfile
-FROM node:20-alpine
+FROM python:3.11-slim
+
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
+
+# Instalar dependencias del sistema necesarias para psycopg2 y reportlab
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar e instalar dependencias primero
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
+
+COPY proto/reportes.proto ./reportes.proto
+
+RUN python -m grpc_tools.protoc \
+    -I. \
+    --python_out=. \
+    --grpc_python_out=. \
+    reportes.proto
+
+# Puerto REST (FastAPI/uvicorn)
+EXPOSE 8007
+# Puerto gRPC (interno entre microservicios)
 EXPOSE 50057
-CMD ["npm", "start"]
+
+# Iniciar FastAPI
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8007"]
