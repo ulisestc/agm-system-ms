@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Se configura un solo motor de Postgres para todos los microservicios
+  # Motor de Postgres para todos los microservicios
   postgres-db:
     image: postgres:15-alpine
     container_name: agm_postgres_db
@@ -13,11 +13,39 @@ services:
       - "5432:5432"
     volumes:
       - agm_db_data:/var/lib/postgresql/data
+      - ./infrastructure/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+
+  # Servidor local de correos 
   smtp4dev:
     image: rnwood/smtp4dev
     container_name: agm_smtp
     ports:
       - "5000:80"
       - "25:25"
+
+  # Caché para sesiones temporales de códigos QR
+  redis-db:
+    image: redis:7-alpine
+    container_name: agm_redis_db
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # MS-5 Asistencias QR
+  ms-asistencias:
+    build: ./microservices/ms-asistencias
+    container_name: agm_ms_asistencias
+    restart: always
+    ports:
+      - "8005:8005"
+      - "50055:50055"
+    environment:
+      - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/attendance_db
+      - REDIS_URL=redis://redis-db:6379/0
+      - GRPC_PORT=50055
+    depends_on:
+      - postgres-db
+      - redis-db
+
 volumes:
   agm_db_data:
