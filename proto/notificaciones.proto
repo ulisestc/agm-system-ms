@@ -21,6 +21,7 @@ service NotificacionesService {
 message BienvenidaRequest {
     string alumnoId = 1;
     string materiaId = 2;
+    string claveUnica = 3;
 }
 
 message BajaRequest {

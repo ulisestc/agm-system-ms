@@ -1,8 +1,21 @@
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
+const nodemailer = require('nodemailer');
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') }); // variables de entorno
+
+//config de mail
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT, 10),
+    secure: process.env.SMTP_PORT === '465', 
+    auth: process.env.SMTP_USER ? {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+    } : undefined, // Si no hay usuario (como en smtp4dev), no usa auth
+    ignoreTLS: process.env.SMTP_HOST === 'localhost' 
+});
 
 // ruta del contrato(s) grpc
 const PROTO_PATH = path.resolve(__dirname, '../../../proto/notificaciones.proto');
@@ -37,7 +50,7 @@ const alumnosCliente = new alumnosProto.DocentesAlumnosService(
 // Los Controladores (Handlers)
 // Se definen las funciones definidas en el contrato
 function sendBienvenida(call, callback) {
-    const { alumnoId, materiaId } = call.request;
+    const { alumnoId, materiaId, claveUnica } = call.request;
     console.log(`\n[gRPC] Petición de Bienvenida recibida. Buscando datos...`);
 
     // 1. Pedimos los datos del alumno al MS-3
@@ -54,13 +67,31 @@ function sendBienvenida(call, callback) {
                 return callback(null, { success: false, error_message: "No se encontró la materia" });
             }
 
-            // 3. ¡Ya tienes todos los datos legibles!
-            console.log(`-> ÉXITO: El alumno es ${alumnoData.nombre} (${alumnoData.email}).`);
-            console.log(`-> ÉXITO: La materia es ${materiaData.nombre}.`);
-            console.log(`-> Aquí Nodemailer enviará el correo real...`);
+            // 3. Armar las opciones del correo usando los datos recuperados de gRPC
+            const mailOptions = {
+                from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
+                to: alumnoData.email,
+                subject: `¡Bienvenido a la materia: ${materiaData.nombre}!`,
+                html: `
+                    <h2>Hola ${alumnoData.nombre}</h2>
+                    <p>Tu registro en la materia <b>${materiaData.nombre}</b> ha sido exitoso.</p>
+                    <p>Tu clave única de acceso al sistema es: <b>AGM-${claveUnica}</b></p>
+                    <p>Por favor, ingresa al portal para cambiarla.</p>
+                `
+            };
 
-            // 4. Le respondes al microservicio que te llamó que todo salió bien
-            callback(null, { success: true, error_message: "" });
+            // 4. Disparar el correo asíncronamente
+            transporter.sendMail(mailOptions, (errorEnvio, info) => {
+                if (errorEnvio) {
+                    console.error("Fallo crítico en Nodemailer:", errorEnvio);
+                    // Si el correo falló, le decimos a gRPC que hubo un error lógico
+                    callback(null, { success: false, error_message: "Error al enviar el correo SMTP" });
+                } else {
+                    console.log(`-> ÉXITO: Correo despachado con ID: ${info.messageId}`);
+                    // Si el correo salió bien, le avisamos a gRPC que la operación fue un éxito total
+                    callback(null, { success: true, error_message: "" });
+                }
+            });
         });
     });
 }
