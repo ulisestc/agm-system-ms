@@ -13,6 +13,11 @@ services:
       - "5432:5432"
     volumes:
       - agm_db_data:/var/lib/postgresql/data
-
+  smtp4dev:
+    image: rnwood/smtp4dev
+    container_name: agm_smtp
+    ports:
+      - "5000:80"
+      - "25:25"
 volumes:
   agm_db_data:

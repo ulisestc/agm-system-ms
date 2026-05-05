@@ -98,20 +98,133 @@ function sendBienvenida(call, callback) {
 
 function sendBajaNotif(call, callback) {
     const { alumnoId, docenteId } = call.request;
-    console.log(`[gRPC] Petición recibida: Baja. Alumno: ${alumnoId}, Docente: ${docenteId}`);
-    callback(null, { success: true, error_message: "" });
+    console.log(`\n[gRPC] Petición de Baja recibida. Buscando datos...`);
+
+    // 1. Obtener datos del Alumno
+    alumnosCliente.GetAlumnoById({ id: alumnoId }, (errorAlumno, alumnoData) => {
+        if (errorAlumno) {
+            console.error("Falló al buscar alumno:", errorAlumno.details);
+            return callback(null, { success: false, error_message: "Alumno no encontrado" });
+        }
+
+        // 2. Obtener datos del Docente
+        alumnosCliente.GetDocenteById({ id: docenteId }, (errorDocente, docenteData) => {
+            if (errorDocente) {
+                console.error("Falló al buscar docente:", errorDocente.details);
+                return callback(null, { success: false, error_message: "Docente no encontrado" });
+            }
+
+            // 3. Armar el correo dirigido al docente
+            const mailOptions = {
+                from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
+                to: docenteData.email,
+                subject: `Aviso del Sistema: Baja de Alumno - ${alumnoData.nombre}`,
+                html: `
+                    <h2>Hola Profesor(a) ${docenteData.nombre},</h2>
+                    <p>Le notificamos oficialmente que el alumno <b>${alumnoData.nombre}</b> ha procesado su baja de la materia.</p>
+                    <p>Este cambio ya se refleja en su concentrado de alumnos.</p>
+                `
+            };
+
+            // 4. Enviar correo asíncronamente
+            transporter.sendMail(mailOptions, (errorEnvio, info) => {
+                if (errorEnvio) {
+                    console.error("Fallo SMTP en Baja:", errorEnvio);
+                    callback(null, { success: false, error_message: "Error al enviar el correo SMTP" });
+                } else {
+                    console.log(`-> ÉXITO: Correo de baja notificado al docente. ID: ${info.messageId}`);
+                    callback(null, { success: true, error_message: "" });
+                }
+            });
+        });
+    });
 }
 
 function sendCierreMateria(call, callback) {
     const { materiaId } = call.request;
-    console.log(`[gRPC] Petición recibida: Cierre Materia. Materia: ${materiaId}`);
-    callback(null, { success: true, error_message: "" });
+    console.log(`\n[gRPC] Petición de Cierre de Materia recibida. Buscando datos...`);
+
+    // 1. Obtener datos de la Materia
+    materiasCliente.GetMateriaById({ id: materiaId }, (errorMateria, materiaData) => {
+        if (errorMateria) {
+            console.error("Falló al buscar materia:", errorMateria.details);
+            return callback(null, { success: false, error_message: "Materia no encontrada" });
+        }
+
+        // 2. Obtener la lista completa de alumnos inscritos
+        alumnosCliente.GetAlumnosByMateria({ materiaId: materiaId }, (errorAlumnos, response) => {
+            if (errorAlumnos) {
+                console.error("Falló al obtener lista de alumnos:", errorAlumnos.details);
+                return callback(null, { success: false, error_message: "Error al consultar lista de alumnos" });
+            }
+
+            const alumnos = response.alumnos || [];
+            if (alumnos.length === 0) {
+                console.log("-> AVISO: La materia se cerró pero no tenía alumnos inscritos.");
+                return callback(null, { success: true, error_message: "Sin alumnos a notificar" });
+            }
+
+            // Extraer correos y unirlos por comas para el BCC
+            const correosBcc = alumnos.map(a => a.email).join(', ');
+
+            // 3. Armar el correo masivo
+            const mailOptions = {
+                from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
+                to: process.env.MAIL_FROM, // Se envía al sistema mismo
+                bcc: correosBcc, // Todos los alumnos reciben copia oculta
+                subject: `Aviso Académico: Cierre de la materia ${materiaData.nombre}`,
+                html: `
+                    <h2>Aviso Importante</h2>
+                    <p>Estimado alumno, le notificamos que el docente ha cerrado oficialmente la evaluación para la materia: <b>${materiaData.nombre}</b>.</p>
+                    <p>Sus calificaciones finales ya han sido publicadas y no están sujetas a más modificaciones.</p>
+                    <p>Por favor, ingrese al sistema AGM para revisar su concentrado.</p>
+                `
+            };
+
+            // 4. Enviar correo asíncronamente
+            transporter.sendMail(mailOptions, (errorEnvio, info) => {
+                if (errorEnvio) {
+                    console.error("Fallo SMTP en Cierre:", errorEnvio);
+                    callback(null, { success: false, error_message: "Error al enviar el correo masivo" });
+                } else {
+                    console.log(`-> ÉXITO: Correos de cierre enviados a ${alumnos.length} alumnos. ID: ${info.messageId}`);
+                    callback(null, { success: true, error_message: "" });
+                }
+            });
+        });
+    });
 }
 
 function sendResetPassword(call, callback) {
     const { email, token } = call.request;
-    console.log(`[gRPC] Petición recibida: Reset Password. Email: ${email}`);
-    callback(null, { success: true, error_message: "" });
+    console.log(`\n[gRPC] Petición de Reset Password recibida para: ${email}`);
+
+    // Asumimos que el frontend de Angular correrá en algún puerto estándar como 4200
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+    const resetUrl = `${baseUrl}/restablecer?token=${token}`;
+
+    const mailOptions = {
+        from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
+        to: email,
+        subject: `Recuperación de Contraseña - AGM`,
+        html: `
+            <h2>Recuperación de Acceso</h2>
+            <p>Hemos recibido una solicitud para restablecer la contraseña de su cuenta.</p>
+            <p>Haga clic en el siguiente enlace seguro para crear una nueva contraseña:</p>
+            <a href="${resetUrl}" style="display: inline-block; padding: 10px 20px; background-color: #004b87; color: #ffffff; text-decoration: none; border-radius: 5px;">Restablecer Contraseña</a>
+            <p><small>Este enlace es de un solo uso y expirará por seguridad. Si no solicitó este cambio, ignore este correo.</small></p>
+        `
+    };
+
+    transporter.sendMail(mailOptions, (errorEnvio, info) => {
+        if (errorEnvio) {
+            console.error("Fallo SMTP en Reset Password:", errorEnvio);
+            callback(null, { success: false, error_message: "Error al enviar el enlace de recuperación" });
+        } else {
+            console.log(`-> ÉXITO: Correo de recuperación enviado a ${email}. ID: ${info.messageId}`);
+            callback(null, { success: true, error_message: "" });
+        }
+    });
 }
 
 // Arranque del server gRPC
