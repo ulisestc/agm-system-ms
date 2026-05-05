@@ -1,32 +1,68 @@
-
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
+
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') }); // variables de entorno
 
-// ruta del contrato grpc
+// ruta del contrato(s) grpc
 const PROTO_PATH = path.resolve(__dirname, '../../../proto/notificaciones.proto');
+const periodosMateriasProtoPath = path.resolve(__dirname, '../../../proto/periodosmaterias.proto');
+const alumnosDocentesProtoPath = path.resolve(__dirname, '../../../proto/alumnosdocentes.proto');
 
-// cargar .proto
-const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
-    keepCase: true,       // Mantener nombres originales
-    longs: String,        // Parsear números grandes como strings
-    enums: String,
-    defaults: true,
-    oneofs: true
-});
+// opciones proto
+const protoOptions = { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true };
 
-// Cargar el paquete gRPC
-const notificacionesProto = grpc.loadPackageDefinition(packageDefinition).notificaciones;
+// Cargar el paquete(s) gRPC
+const notificacionesPackageDef = protoLoader.loadSync(PROTO_PATH, protoOptions);
+const materiasPackageDef = protoLoader.loadSync(periodosMateriasProtoPath, protoOptions);
+const alumnosPackageDef = protoLoader.loadSync(alumnosDocentesProtoPath, protoOptions);
+
+// convertir a objetos gRPC
+const notificacionesProto = grpc.loadPackageDefinition(notificacionesPackageDef).notificaciones;
+const materiasProto = grpc.loadPackageDefinition(materiasPackageDef).materias;
+const alumnosProto = grpc.loadPackageDefinition(alumnosPackageDef).alumnos;
+
+// instanciar clientes 
+const materiasCliente = new materiasProto.PeriodosMateriasService(
+    'localhost:50052', 
+    grpc.credentials.createInsecure()
+);
+
+const alumnosCliente = new alumnosProto.DocentesAlumnosService(
+    'localhost:50053', 
+    grpc.credentials.createInsecure()
+);
+
 
 // Los Controladores (Handlers)
 // Se definen las funciones definidas en el contrato
 function sendBienvenida(call, callback) {
     const { alumnoId, materiaId } = call.request;
-    console.log(`[gRPC] Petición recibida: Bienvenida. Alumno: ${alumnoId}, Materia: ${materiaId}`);
-    
-    // Por ahora, solo simulamos que fue un éxito
-    callback(null, { success: true, error_message: "" });
+    console.log(`\n[gRPC] Petición de Bienvenida recibida. Buscando datos...`);
+
+    // 1. Pedimos los datos del alumno al MS-3
+    alumnosCliente.GetAlumnoById({ id: alumnoId }, (errorAlumno, alumnoData) => {
+        if (errorAlumno) {
+            console.error("Falló al buscar alumno:", errorAlumno.details);
+            return callback(null, { success: false, error_message: "No se encontró el alumno" });
+        }
+
+        // 2. Si el alumno existe, pedimos los datos de la materia al MS-2
+        materiasCliente.GetMateriaById({ id: materiaId }, (errorMateria, materiaData) => {
+            if (errorMateria) {
+                console.error("Falló al buscar materia:", errorMateria.details);
+                return callback(null, { success: false, error_message: "No se encontró la materia" });
+            }
+
+            // 3. ¡Ya tienes todos los datos legibles!
+            console.log(`-> ÉXITO: El alumno es ${alumnoData.nombre} (${alumnoData.email}).`);
+            console.log(`-> ÉXITO: La materia es ${materiaData.nombre}.`);
+            console.log(`-> Aquí Nodemailer enviará el correo real...`);
+
+            // 4. Le respondes al microservicio que te llamó que todo salió bien
+            callback(null, { success: true, error_message: "" });
+        });
+    });
 }
 
 function sendBajaNotif(call, callback) {
@@ -56,7 +92,7 @@ function main() {
         SendBienvenida: sendBienvenida,
         SendBajaNotif: sendBajaNotif,
         SendCierreMateria: sendCierreMateria,
-        sendResetPassword: sendResetPassword
+        SendResetPassword: sendResetPassword
     });
 
     const port = process.env.GRPC_PORT || '50056';
