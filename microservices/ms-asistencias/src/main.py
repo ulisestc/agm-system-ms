@@ -98,6 +98,56 @@ def registrar_asistencia(req: schemas.RegistrarAsistenciaRequest, db: Session = 
         "estado": estado
     }
 
+@app.delete("/sesiones/{materia_id}/cerrar", summary="Cierra forzosamente una sesión activa")
+def cerrar_sesion(materia_id: str, db: Session = Depends(get_db)):
+    sesion_key = f"sesion_activa:{materia_id}"
+    
+    if not redis_client.exists(sesion_key):
+        raise HTTPException(status_code=404, detail="No hay una sesión activa para esta materia.")
+    
+    # Obtener el ID antes de borrar
+    sesion_data = json.loads(redis_client.get(sesion_key))
+    sesion_id = sesion_data["sesion_id"]
+    
+    # Eliminar de Redis (cierre forzoso)
+    redis_client.delete(sesion_key)
+    
+    # Actualizar estado en Postgres
+    db_sesion = db.query(models.SesionAsistencia).filter(models.SesionAsistencia.id == sesion_id).first()
+    if db_sesion:
+        db_sesion.activa = False
+        db.commit()
+
+    return {"success": True, "message": "Sesión cerrada correctamente."}
+
+@app.get("/asistencias/{materia_id}/hoy", summary="Obtiene los alumnos que han registrado asistencia en la sesión actual")
+def asistencias_hoy(materia_id: str, db: Session = Depends(get_db)):
+    # Buscar la sesión más reciente de esta materia en Postgres
+    sesion_reciente = db.query(models.SesionAsistencia).filter(
+        models.SesionAsistencia.materia_id == materia_id
+    ).order_by(models.SesionAsistencia.fecha_creacion.desc()).first()
+    
+    if not sesion_reciente:
+        return {"success": True, "data": []}
+        
+    registros = db.query(models.RegistroAsistencia).filter(
+        models.RegistroAsistencia.sesion_id == sesion_reciente.id
+    ).all()
+    
+    return {
+        "success": True, 
+        "sesion_id": sesion_reciente.id,
+        "fecha": sesion_reciente.fecha_creacion,
+        "data": registros
+    }
+
+@app.get("/asistencias/{materia_id}/historial", summary="Obtiene el historial de sesiones pasadas de una materia")
+def historial_asistencias(materia_id: str, db: Session = Depends(get_db)):
+    sesiones = db.query(models.SesionAsistencia).filter(
+        models.SesionAsistencia.materia_id == materia_id
+    ).order_by(models.SesionAsistencia.fecha_creacion.desc()).all()
+    
+    return {"success": True, "data": sesiones}
 
 def _start_grpc():
     try:
