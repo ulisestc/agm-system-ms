@@ -1,18 +1,21 @@
 FROM python:3.11-slim
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias
 RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiamos el código fuente
 COPY ./src ./src
 
-# Exponemos el puerto REST y gRPC
+COPY asistencias.proto .
+RUN python -m grpc_tools.protoc -I. --python_out=./src --grpc_python_out=./src asistencias.proto
+
+# --- EL ARREGLO MÁGICO ---
+# Reemplaza la importación rota por una importación relativa correcta
+RUN sed -i 's/import asistencias_pb2/from . import asistencias_pb2/g' ./src/asistencias_pb2_grpc.py
+
 EXPOSE 8005
 EXPOSE 50055
 
-# Comando para ejecutar FastAPI usando la ruta correcta al main
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8005"]

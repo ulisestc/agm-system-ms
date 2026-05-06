@@ -1,10 +1,12 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
+import threading
 import uuid
 import json
 from datetime import datetime
 
 from src.database import engine, Base, get_db, redis_client
+from src import grpc_server
 from src import models, schemas
 
 # Crear tablas en PostgreSQL si no existen
@@ -95,3 +97,17 @@ def registrar_asistencia(req: schemas.RegistrarAsistenciaRequest, db: Session = 
         "message": f"Asistencia registrada con éxito.", 
         "estado": estado
     }
+
+
+def _start_grpc():
+    try:
+        grpc_server.serve()
+    except Exception as e:
+        print(f"[WARNING] No se pudo iniciar el servidor gRPC: {e}")
+
+
+# Evento de inicio de FastAPI para arrancar el servidor gRPC en segundo plano
+@app.on_event("startup")
+def startup_event():
+    grpc_thread = threading.Thread(target=_start_grpc, daemon=True)
+    grpc_thread.start()
