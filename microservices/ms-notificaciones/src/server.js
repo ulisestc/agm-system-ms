@@ -2,6 +2,7 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 const nodemailer = require('nodemailer');
+const db = require('./db'); // para logs
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') }); // variables de entorno
 
@@ -84,10 +85,20 @@ function sendBienvenida(call, callback) {
             transporter.sendMail(mailOptions, (errorEnvio, info) => {
                 if (errorEnvio) {
                     console.error("Fallo crítico en Nodemailer:", errorEnvio);
+                    // Log del fallo en la base de datos
+                    db.query(
+                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                        ['bienvenida', alumnoData.email, alumnoId.toString(), 'fallido']
+                    ).catch(err => console.error('Error al guardar log de fallo:', err));
                     // Si el correo falló, le decimos a gRPC que hubo un error lógico
                     callback(null, { success: false, error_message: "Error al enviar el correo SMTP" });
                 } else {
                     console.log(`-> ÉXITO: Correo despachado con ID: ${info.messageId}`);
+                    // Log del éxito en la base de datos
+                    db.query(
+                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                        ['bienvenida', alumnoData.email, alumnoId.toString(), 'enviado']
+                    ).catch(err => console.error('Error al guardar log de éxito:', err));
                     // Si el correo salió bien, le avisamos a gRPC que la operación fue un éxito total
                     callback(null, { success: true, error_message: "" });
                 }
@@ -130,9 +141,19 @@ function sendBajaNotif(call, callback) {
             transporter.sendMail(mailOptions, (errorEnvio, info) => {
                 if (errorEnvio) {
                     console.error("Fallo SMTP en Baja:", errorEnvio);
+                    // Log del fallo en la base de datos
+                    db.query(
+                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                        ['baja', docenteData.email, docenteId.toString(), 'fallido']
+                    ).catch(err => console.error('Error al guardar log de fallo:', err));
                     callback(null, { success: false, error_message: "Error al enviar el correo SMTP" });
                 } else {
                     console.log(`-> ÉXITO: Correo de baja notificado al docente. ID: ${info.messageId}`);
+                    // Log del éxito en la base de datos
+                    db.query(
+                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                        ['baja', docenteData.email, docenteId.toString(), 'enviado']
+                    ).catch(err => console.error('Error al guardar log de éxito:', err));
                     callback(null, { success: true, error_message: "" });
                 }
             });
@@ -185,9 +206,19 @@ function sendCierreMateria(call, callback) {
             transporter.sendMail(mailOptions, (errorEnvio, info) => {
                 if (errorEnvio) {
                     console.error("Fallo SMTP en Cierre:", errorEnvio);
+                    // Log del fallo en la base de datos
+                    db.query(
+                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                        ['cierre_materia', correosBcc, materiaId.toString(), 'fallido']
+                    ).catch(err => console.error('Error al guardar log de fallo:', err));
                     callback(null, { success: false, error_message: "Error al enviar el correo masivo" });
                 } else {
                     console.log(`-> ÉXITO: Correos de cierre enviados a ${alumnos.length} alumnos. ID: ${info.messageId}`);
+                    // Log del éxito en la base de datos
+                    db.query(
+                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                        ['cierre_materia', correosBcc, materiaId.toString(), 'enviado']
+                    ).catch(err => console.error('Error al guardar log de éxito:', err));
                     callback(null, { success: true, error_message: "" });
                 }
             });
@@ -219,9 +250,19 @@ function sendResetPassword(call, callback) {
     transporter.sendMail(mailOptions, (errorEnvio, info) => {
         if (errorEnvio) {
             console.error("Fallo SMTP en Reset Password:", errorEnvio);
+            // Log del fallo en la base de datos
+            db.query(
+                'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                ['reset_password', email, null, 'fallido']
+            ).catch(err => console.error('Error al guardar log de fallo:', err));
             callback(null, { success: false, error_message: "Error al enviar el enlace de recuperación" });
         } else {
             console.log(`-> ÉXITO: Correo de recuperación enviado a ${email}. ID: ${info.messageId}`);
+            // Log del éxito en la base de datos
+            db.query(
+                'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                ['reset_password', email, null, 'enviado']
+            ).catch(err => console.error('Error al guardar log de éxito:', err));
             callback(null, { success: true, error_message: "" });
         }
     });
