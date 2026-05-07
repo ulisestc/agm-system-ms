@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package agm.materias.v1;
+
+message Empty {}
+
+message MateriaIdRequest {
+  int64 id = 1;
+}
+
+message MateriaByPeriodoRequest {
+  int64 periodo_id = 1;
+}
+
+message MateriaMessage {
+  int64 id = 1;
+  string nrc = 2;
+  string nombre = 3;
+  string seccion = 4;
+  string clave = 5;
+  int64 docente_id = 6;
+  string docente_nombre = 7;
+  string horario = 8;
+  int64 periodo_id = 9;
+  bool activo = 10;
+}
+
+message MateriaResponse {
+  bool success = 1;
+  string message = 2;
+  MateriaMessage data = 3;
+}
+
+message MateriasResponse {
+  bool success = 1;
+  string message = 2;
+  repeated MateriaMessage data = 3;
+}
+
+service MateriasService {
+  rpc GetMateriaById(MateriaIdRequest) returns (MateriaResponse);
+  rpc ListMateriasByPeriodo(MateriaByPeriodoRequest) returns (MateriasResponse);
+  rpc ListMaterias(Empty) returns (MateriasResponse);
+}
