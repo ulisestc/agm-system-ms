@@ -2,7 +2,10 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from django.conf import settings
+
 from .models import Materia
+from .grpc_client import get_periodos_client_from_settings
 from .pagination import APIPageNumberPagination
 from .serializers import MateriaSerializer
 
@@ -73,3 +76,25 @@ class MateriaViewSet(viewsets.ModelViewSet):
         materias = self.get_queryset().filter(periodo_id=periodo_id)
         serializer = self.get_serializer(materias, many=True)
         return self._success(serializer.data, f"Materias del periodo {periodo_id}.")
+
+    @action(detail=False, methods=["get"], url_path="con-periodo")
+    def con_periodo(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+        client = get_periodos_client_from_settings(settings)
+        periodos_cache = {}
+        data = []
+
+        for materia in queryset:
+            periodo_nombre = periodos_cache.get(materia.periodo_id)
+            if periodo_nombre is None:
+                try:
+                    periodo_nombre = client.get_periodo_name_by_id(materia.periodo_id)
+                except Exception:
+                    periodo_nombre = ""
+                periodos_cache[materia.periodo_id] = periodo_nombre
+
+            item = self.get_serializer(materia).data
+            item["periodo_nombre"] = periodo_nombre
+            data.append(item)
+
+        return self._success(data, "Materias con nombre de periodo obtenidas correctamente.")

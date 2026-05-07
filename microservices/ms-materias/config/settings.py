@@ -51,6 +51,9 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+PERIODOS_GRPC_HOST = os.getenv("PERIODOS_GRPC_HOST", "localhost")
+PERIODOS_GRPC_PORT = int(os.getenv("PERIODOS_GRPC_PORT", "50051"))
+PERIODOS_GRPC_TIMEOUT = float(os.getenv("PERIODOS_GRPC_TIMEOUT", "5"))
 
 USE_SQLITE = "test" in sys.argv or os.getenv("DJANGO_USE_SQLITE", "0") == "1"
 

@@ -5,6 +5,8 @@ Este repositorio contiene dos microservicios del proyecto AGM para Servicios Web
 - `ms-periodos`: CRUD de periodos académicos.
 - `ms-materias`: CRUD de materias independientes.
 
+`ms-periodos` expone también un servidor gRPC en el puerto `50051`, y `ms-materias` lo consulta para validar que el `periodo_id` exista antes de crear o actualizar una materia.
+
 Cada servicio tiene su propio proyecto Django, su propia base de datos PostgreSQL y su propio despliegue en Docker.
 
 ## Estructura
@@ -42,6 +44,7 @@ Servicios expuestos:
 
 - `ms-periodos`: `http://localhost:8001`
 - `ms-materias`: `http://localhost:8002`
+- `ms-periodos gRPC`: `localhost:50051`
 
 Endpoints de salud:
 
@@ -104,6 +107,8 @@ curl -X POST http://localhost:8001/api/periodos/1/activar/
 
 ### 5. Crear una materia
 
+Antes de crear una materia, asegúrate de haber creado un periodo válido. `ms-materias` consulta a `ms-periodos` por gRPC y rechazará el registro si el `periodo_id` no existe.
+
 ```bash
 curl -X POST http://localhost:8002/api/materias/ \
   -H "Content-Type: application/json" \
@@ -126,13 +131,19 @@ curl -X POST http://localhost:8002/api/materias/ \
 curl http://localhost:8002/api/materias/?periodo_id=1
 ```
 
-### 7. Consultar una materia por ID
+### 7. Listar materias con nombre de periodo
+
+```bash
+curl http://localhost:8002/api/materias/con-periodo/
+```
+
+### 8. Consultar una materia por ID
 
 ```bash
 curl http://localhost:8002/api/materias/1/
 ```
 
-### 8. Actualizar una materia
+### 9. Actualizar una materia
 
 ```bash
 curl -X PUT http://localhost:8002/api/materias/1/ \
@@ -150,7 +161,7 @@ curl -X PUT http://localhost:8002/api/materias/1/ \
   }'
 ```
 
-### 9. Eliminar una materia
+### 10. Eliminar una materia
 
 ```bash
 curl -X DELETE http://localhost:8002/api/materias/1/
@@ -170,4 +181,3 @@ cd ../ms-materias && python manage.py test
 - `ms-periodos` y `ms-materias` son procesos distintos.
 - Cada servicio usa su propia base de datos.
 - La comunicación entre servicios queda preparada para integrar gRPC con los contratos en `proto/`.
-

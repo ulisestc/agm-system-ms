@@ -51,6 +51,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+GRPC_PORT = int(os.getenv("GRPC_PORT", "50051"))
 
 USE_SQLITE = "test" in sys.argv or os.getenv("DJANGO_USE_SQLITE", "0") == "1"
 
