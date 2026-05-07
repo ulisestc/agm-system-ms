@@ -47,25 +47,23 @@ services:
       - redis-db
     
   ms-notificaciones:
-    build: 
-      context: ./microservices/ms-notificaciones
-      dockerfile: Dockerfile
-    container_name: agm_ms_notificaciones
-    restart: always
-    # Carga las variables directamente desde tu archivo local
-    env_file:
-      - ./microservices/ms-notificaciones/.env
-    # Sobrescribimos solo las variables que dependen de la red de Docker
-    environment:
-      - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/agm_notificaciones_db
-      - SMTP_HOST=smtp4dev
-      - MS_MATERIAS_URL=ms-materias:50052
-      - MS_ALUMNOS_URL=ms-alumnos:50053
-    ports:
-      - "50056:50056"
-    depends_on:
-      - postgres-db
-      - smtp4dev
+      build: 
+        context: .
+        dockerfile: microservices/ms-notificaciones/Dockerfile
+      container_name: agm_ms_notificaciones
+      restart: always
+      env_file:
+        - ./microservices/ms-notificaciones/.env
+      environment:
+        - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/agm_notificaciones_db
+        - SMTP_HOST=smtp4dev
+        - MS_MATERIAS_URL=ms-materias:50052
+        - MS_ALUMNOS_URL=ms-auth:50053
+      ports:
+        - "50056:50056"
+      depends_on:
+        - postgres-db
+        - smtp4dev
 
 volumes:
   agm_db_data:

@@ -1,0 +1,8 @@
+$kind: http-request
+name: Cerrar Sesión Activa
+method: DELETE
+url: '{{base_url_asistencias}}/sesiones/:materia_id/cerrar'
+order: 4000
+pathVariables:
+  - key: materia_id
+    value: '{{materia_id}}'

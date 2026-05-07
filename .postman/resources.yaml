@@ -1,0 +1,12 @@
+# Use this workspace to collaborate
+workspace:
+  id: b4f24569-13d1-4ecf-81be-c2c36e516732
+
+localResources:
+  specs:
+    - ../proto/alumnosdocentes.proto
+    - ../proto/asistencias.proto
+    - ../proto/notificaciones.proto
+    - ../proto/periodosmaterias.proto
+    - ../proto/reportes.proto
+    - ../microservices/ms-asistencias/asistencias.proto
