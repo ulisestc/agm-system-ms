@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError
+from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -6,7 +7,13 @@ from .models import Materia
 
 
 class MateriaAPITests(APITestCase):
-    def test_create_and_filter_by_periodo(self):
+    @patch("materias.serializers.get_periodos_client_from_settings")
+    def test_create_and_filter_by_periodo(self, mock_get_client):
+        class FakeClient:
+            def get_periodo_by_id(self, periodo_id):
+                return None
+
+        mock_get_client.return_value = FakeClient()
         response = self.client.post(
             "/api/materias/",
             {
@@ -28,6 +35,30 @@ class MateriaAPITests(APITestCase):
         self.assertEqual(filtered.status_code, status.HTTP_200_OK)
         self.assertEqual(len(filtered.data["data"]["results"]), 1)
         self.assertEqual(filtered.data["data"]["results"][0]["nrc"], "12345")
+
+    @patch("materias.views.get_periodos_client_from_settings")
+    def test_list_with_periodo_name(self, mock_get_client):
+        Materia.objects.create(
+            nrc="54321",
+            nombre="Arquitectura de Software",
+            seccion="001",
+            clave="ASW-401",
+            docente_id=11,
+            docente_nombre="Dr. Ruiz",
+            horario="Martes 10:00-12:00",
+            periodo_id=7,
+        )
+
+        class FakeClient:
+            def get_periodo_name_by_id(self, periodo_id):
+                return "2026 Primavera"
+
+        mock_get_client.return_value = FakeClient()
+
+        response = self.client.get("/api/materias/con-periodo/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"][0]["periodo_nombre"], "2026 Primavera")
+        self.assertEqual(response.data["data"][0]["nrc"], "54321")
 
     def test_unique_nrc_validation(self):
         Materia.objects.create(
