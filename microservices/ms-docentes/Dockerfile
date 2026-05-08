@@ -10,14 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar e instalar dependencias de Python
-COPY requirements.txt .
+COPY microservices/ms-docentes/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar código fuente
-COPY . .
+COPY microservices/ms-docentes/ .
 
 # Generar código gRPC desde el proto
-COPY ../../proto/alumnosdocentes.proto /proto/alumnosdocentes.proto
+COPY proto/alumnosdocentes.proto /proto/alumnosdocentes.proto
 RUN python -m grpc_tools.protoc \
     --proto_path=/proto \
     --python_out=src/grpc_generated \

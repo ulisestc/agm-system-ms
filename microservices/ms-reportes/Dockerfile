@@ -9,22 +9,17 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar e instalar dependencias primero
-COPY requirements.txt .
+COPY microservices/ms-reportes/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY microservices/ms-reportes/ .
+COPY proto/reportes.proto /proto/reportes.proto
 
 RUN python -m grpc_tools.protoc \
-    -I. \
+    -I/proto \
     --python_out=. \
     --grpc_python_out=. \
-    reportes.proto
-
-RUN python -m grpc_tools.protoc \
-    -I. \
-    --python_out=. \
-    --grpc_python_out=. \
-    reportes.proto
+    /proto/reportes.proto
 
 # Puerto REST (FastAPI/uvicorn)
 EXPOSE 8007

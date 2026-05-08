@@ -33,7 +33,7 @@ const alumnosPackageDef = protoLoader.loadSync(alumnosDocentesProtoPath, protoOp
 
 // convertir a objetos gRPC
 const notificacionesProto = grpc.loadPackageDefinition(notificacionesPackageDef).notificaciones;
-const materiasProto = grpc.loadPackageDefinition(materiasPackageDef).materias;
+const materiasProto = grpc.loadPackageDefinition(materiasPackageDef).agm.periodosmaterias.v1;
 const alumnosProto = grpc.loadPackageDefinition(alumnosPackageDef).alumnos;
 
 // instanciar clientes 
