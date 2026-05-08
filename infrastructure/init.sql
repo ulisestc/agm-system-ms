@@ -2,6 +2,7 @@
 CREATE DATABASE agm_auth_db;
 CREATE DATABASE agm_notificaciones_db;
 CREATE DATABASE attendance_db;
+CREATE DATABASE agm_docentes_db;
 
 -- conectar a base de datos de notificaciones y crear tabla
 \c agm_notificaciones_db;

@@ -1,0 +1,23 @@
+# ── Web Framework ──────────────────────────────────────────────────────────────
+fastapi==0.115.12
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20       # para recibir archivos (UploadFile)
+
+# ── ORM & Base de datos ────────────────────────────────────────────────────────
+SQLAlchemy==2.0.40
+psycopg2-binary==2.9.10        # driver PostgreSQL
+
+# ── Variables de entorno ───────────────────────────────────────────────────────
+python-dotenv==1.1.0
+
+# ── Parseo de archivos ─────────────────────────────────────────────────────────
+pdfplumber==0.11.7             # extracción de texto/tablas desde PDF
+openpyxl==3.1.5                # lectura de archivos .xlsx
+
+# ── gRPC ──────────────────────────────────────────────────────────────────────
+grpcio==1.71.0
+grpcio-tools==1.71.0           # genera código Python desde .proto
+
+# ── Validación ─────────────────────────────────────────────────────────────────
+pydantic==2.11.4
+pydantic-settings==2.9.1

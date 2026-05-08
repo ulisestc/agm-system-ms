@@ -46,5 +46,20 @@ services:
       - postgres-db
       - redis-db
 
+  # MS-3 Docentes & Alumnos
+  ms-docentes:
+    build: ./microservices/ms-docentes
+    container_name: agm_ms_docentes
+    restart: always
+    ports:
+      - "8003:8003"
+      - "50053:50053"
+    environment:
+      - DB_URL=postgresql://postgres:root@postgres-db:5432/agm_docentes_db
+      - REST_PORT=8003
+      - GRPC_PORT=50053
+    depends_on:
+      - postgres-db
+
 volumes:
   agm_db_data:

@@ -6,6 +6,7 @@ service DocentesAlumnosService {
   // pdf
     rpc GetAlumnoById (IdRequest) returns (AlumnoInfo);
     rpc GetAlumnosByMateria (MateriaIdRequest) returns (AlumnosListResponse);
+    rpc IsAlumnoEnMateria (AlumnoMateriaRequest) returns (BoolResponse);
     
   // agregado para notificaciones
     rpc GetDocenteById (IdRequest) returns (DocenteInfo);
@@ -22,7 +23,16 @@ message MateriaIdRequest {
     string materiaId = 1;
 }
 
+message AlumnoMateriaRequest {
+    string alumnoId = 1;
+    string materiaId = 2;
+}
+
 // --- Payloads (out) ---
+
+message BoolResponse {
+    bool result = 1;
+}
 
 message AlumnoInfo {
     string id = 1;
