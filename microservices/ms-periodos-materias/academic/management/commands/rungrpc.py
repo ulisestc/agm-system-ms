@@ -9,7 +9,7 @@ from academic.grpc_service import PeriodosService, grpc_port
 
 
 class Command(BaseCommand):
-    help = "Run the gRPC server for ms-periodos."
+    help = "Run the gRPC server for ms-periodos-materias."
 
     def handle(self, *args, **options):
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

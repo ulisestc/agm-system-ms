@@ -4,7 +4,7 @@ from django.urls import include, path
 
 
 def health_check(_request):
-    return JsonResponse({"success": True, "message": "ms-periodos is running"})
+    return JsonResponse({"success": True, "message": "ms-periodos-materias is running"})
 
 
 urlpatterns = [

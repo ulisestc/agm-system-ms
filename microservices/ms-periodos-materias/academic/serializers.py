@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Periodo
+from .models import Periodo, Materia
 
 
 class PeriodoSerializer(serializers.ModelSerializer):
@@ -17,3 +17,17 @@ class PeriodoSerializer(serializers.ModelSerializer):
                 {"fecha_fin": "La fecha de fin debe ser mayor o igual a la fecha de inicio."}
             )
         return attrs
+
+
+class MateriaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Materia
+        fields = "__all__"
+        read_only_fields = ("creado_en", "actualizado_en")
+
+    def validate_periodo_id(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("El identificador del periodo debe ser mayor que cero.")
+        if not Periodo.objects.filter(id=value).exists():
+            raise serializers.ValidationError("El periodo indicado no existe.")
+        return value
