@@ -70,7 +70,9 @@ services:
 
   # MS-3 Docentes & Alumnos
   ms-docentes:
-    build: ./microservices/ms-docentes
+    build:
+      context: .
+      dockerfile: microservices/ms-docentes/Dockerfile
     container_name: agm_ms_docentes
     restart: always
     ports:
@@ -105,17 +107,19 @@ services:
       - postgres-db
   # MS-7 Reportes
   ms-reportes:
-      build: ./microservices/ms-reportes
-      container_name: agm_ms_reportes
-      restart: always
-      ports:
-        - "8007:8007"
-        - "50057:50057"
-      environment:
-        - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/reports_db
-        - GRPC_PORT=50057
-      depends_on:
-        - postgres-db
+    build:
+      context: .
+      dockerfile: microservices/ms-reportes/Dockerfile
+    container_name: agm_ms_reportes
+    restart: always
+    ports:
+      - "8007:8007"
+      - "50057:50057"
+    environment:
+      - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/reports_db
+      - GRPC_PORT=50057
+    depends_on:
+      - postgres-db
 
 volumes:
   agm_db_data:
