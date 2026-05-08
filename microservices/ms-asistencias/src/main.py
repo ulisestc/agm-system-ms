@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import threading
 import uuid
@@ -18,9 +19,22 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configuración de CORS para permitir solicitudes desde cualquier origen
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/")
 def read_root():
-    return {"mensaje": "¡MS-5 Asistencias QR en línea!"}
+    return {
+        "success": True,
+        "data": {"mensaje": "¡MS-5 Asistencias QR en línea!"},
+        "message": "Conexión exitosa"
+    }
 
 @app.post("/sesiones/iniciar", summary="Inicia una sesión de 10 minutos para una materia")
 def iniciar_sesion(req: schemas.IniciarSesionRequest, db: Session = Depends(get_db)):
@@ -49,8 +63,8 @@ def iniciar_sesion(req: schemas.IniciarSesionRequest, db: Session = Depends(get_
 
     return {
         "success": True, 
-        "message": "Sesión iniciada. Expirará en 10 minutos.", 
-        "sesion_id": sesion_id
+        "data": {"sesion_id": sesion_id},
+        "message": "Sesión iniciada. Expirará en 10 minutos."
     }
 
 @app.post("/asistencias/registrar", summary="Registra asistencia mediante escaneo de QR")
@@ -94,8 +108,8 @@ def registrar_asistencia(req: schemas.RegistrarAsistenciaRequest, db: Session = 
 
     return {
         "success": True, 
-        "message": f"Asistencia registrada con éxito.", 
-        "estado": estado
+        "data": {"estado": estado},
+        "message": "Asistencia registrada con éxito."
     }
 
 @app.delete("/sesiones/{materia_id}/cerrar", summary="Cierra forzosamente una sesión activa")
@@ -118,7 +132,11 @@ def cerrar_sesion(materia_id: str, db: Session = Depends(get_db)):
         db_sesion.activa = False
         db.commit()
 
-    return {"success": True, "message": "Sesión cerrada correctamente."}
+    return {
+        "success": True, 
+        "data": {},
+        "message": "Sesión cerrada correctamente."
+    }
 
 @app.get("/asistencias/{materia_id}/hoy", summary="Obtiene los alumnos que han registrado asistencia en la sesión actual")
 def asistencias_hoy(materia_id: str, db: Session = Depends(get_db)):
@@ -128,7 +146,7 @@ def asistencias_hoy(materia_id: str, db: Session = Depends(get_db)):
     ).order_by(models.SesionAsistencia.fecha_creacion.desc()).first()
     
     if not sesion_reciente:
-        return {"success": True, "data": []}
+        return {"success": True, "data": [], "message": "No hay sesiones registradas hoy."}
         
     registros = db.query(models.RegistroAsistencia).filter(
         models.RegistroAsistencia.sesion_id == sesion_reciente.id
@@ -136,18 +154,42 @@ def asistencias_hoy(materia_id: str, db: Session = Depends(get_db)):
     
     return {
         "success": True, 
-        "sesion_id": sesion_reciente.id,
-        "fecha": sesion_reciente.fecha_creacion,
-        "data": registros
+        "data": {
+            "sesion_id": sesion_reciente.id,
+            "fecha": sesion_reciente.fecha_creacion,
+            "registros": registros
+        },
+        "message": "Asistencias de la sesión más reciente obtenidas."
     }
 
 @app.get("/asistencias/{materia_id}/historial", summary="Obtiene el historial de sesiones pasadas de una materia")
-def historial_asistencias(materia_id: str, db: Session = Depends(get_db)):
+def historial_asistencias(
+    materia_id: str, 
+    page: int = Query(1, ge=1, description="Número de página"), 
+    limit: int = Query(10, ge=1, le=100, description="Cantidad de registros por página"), 
+    db: Session = Depends(get_db)
+):
+    offset = (page - 1) * limit
+    
+    total_sesiones = db.query(models.SesionAsistencia).filter(
+        models.SesionAsistencia.materia_id == materia_id
+    ).count()
+    
     sesiones = db.query(models.SesionAsistencia).filter(
         models.SesionAsistencia.materia_id == materia_id
-    ).order_by(models.SesionAsistencia.fecha_creacion.desc()).all()
+    ).order_by(models.SesionAsistencia.fecha_creacion.desc()).offset(offset).limit(limit).all()
     
-    return {"success": True, "data": sesiones}
+    return {
+        "success": True, 
+        "data": {
+            "total_records": total_sesiones,
+            "current_page": page,
+            "limit": limit,
+            "total_pages": (total_sesiones + limit - 1) // limit,
+            "sesiones": sesiones
+        },
+        "message": "Historial paginado obtenido correctamente."
+    }
 
 def _start_grpc():
     try:
