@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Motor de Postgres para todos los microservicios
   postgres-db:
