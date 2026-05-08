@@ -51,7 +51,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
-GRPC_PORT = int(os.getenv("GRPC_PORT", "50051"))
+GRPC_PORT = int(os.getenv("GRPC_PORT", "50052"))
 
 USE_SQLITE = "test" in sys.argv or os.getenv("DJANGO_USE_SQLITE", "0") == "1"
 
@@ -72,7 +72,7 @@ else:
     DATABASES = {
         "default": {
             "ENGINE": DB_ENGINE,
-            "NAME": os.getenv("DB_NAME", "agm_academic_db"),
+            "NAME": os.getenv("DB_NAME", "agm_periodos_materias_db"),
             "USER": os.getenv("DB_USER", "postgres"),
             "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),
             "HOST": os.getenv("DB_HOST", "localhost"),

@@ -1,0 +1,5 @@
+$kind: http-request
+name: Eliminar Materia
+method: DELETE
+url: '{{base_url_periodos}}/api/materias/1/'
+order: 2400

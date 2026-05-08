@@ -3,9 +3,9 @@ from concurrent import futures
 
 from django.core.management.base import BaseCommand
 
-import periodos_pb2_grpc
+import periodosmaterias_pb2_grpc
 
-from academic.grpc_service import PeriodosService, grpc_port
+from academic.grpc_service import PeriodosMateriasService, grpc_port
 
 
 class Command(BaseCommand):
@@ -13,7 +13,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-        periodos_pb2_grpc.add_PeriodosServiceServicer_to_server(PeriodosService(), server)
+        periodosmaterias_pb2_grpc.add_PeriodosMateriasServiceServicer_to_server(PeriodosMateriasService(), server)
         server.add_insecure_port(f"[::]:{grpc_port()}")
         server.start()
         self.stdout.write(self.style.SUCCESS(f"gRPC server running on port {grpc_port()}"))

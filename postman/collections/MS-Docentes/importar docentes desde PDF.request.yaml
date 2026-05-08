@@ -1,0 +1,14 @@
+$kind: http-request
+name: Importar Docentes desde PDF
+method: POST
+url: '{{base_url_docentes}}/docentes/importar'
+order: 1100
+headers:
+  - key: Content-Type
+    value: multipart/form-data
+body:
+  type: formdata
+  content:
+    - key: archivo
+      type: file
+      src: './fixtures/docentes-programacion.pdf'

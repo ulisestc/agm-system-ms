@@ -1,0 +1,12 @@
+$kind: grpc-request
+name: MS-Docentes: GetAlumnoById
+url: 'grpc://{{base_url_docentes_grpc}}'
+service: alumnos.DocentesAlumnosService
+method: GetAlumnoById
+order: 1100
+body:
+  type: json
+  content: |-
+    {
+      "id": "{{alumno_id}}"
+    }

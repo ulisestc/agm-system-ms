@@ -1,0 +1,22 @@
+$kind: http-request
+name: Actualizar Materia
+method: PUT
+url: '{{base_url_periodos}}/api/materias/1/'
+order: 2300
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "nrc": "12345",
+      "nombre": "Servicios Web II",
+      "seccion": "001",
+      "clave": "ISW-402",
+      "docente_id": 10,
+      "docente_nombre": "Dra. López",
+      "horario": "Lunes 10:00-12:00",
+      "periodo_id": 1,
+      "activo": true
+    }

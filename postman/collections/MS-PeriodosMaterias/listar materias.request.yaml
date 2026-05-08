@@ -1,0 +1,5 @@
+$kind: http-request
+name: Listar Materias
+method: GET
+url: '{{base_url_periodos}}/api/materias/'
+order: 1900

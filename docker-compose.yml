@@ -1,5 +1,4 @@
-version: '3.8'
-
+name: agm_system
 services:
   # Motor de Postgres para todos los microservicios
   postgres-db:
@@ -31,16 +30,21 @@ services:
 
   # MS-5 Asistencias QR
   ms-asistencias:
-    build: ./microservices/ms-asistencias
+    build:
+      context: .
+      dockerfile: microservices/ms-asistencias/Dockerfile
     container_name: agm_ms_asistencias
     restart: always
     ports:
       - "8005:8005"
       - "50055:50055"
+    env_file:
+      - ./microservices/ms-asistencias/.env
     environment:
       - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/attendance_db
       - REDIS_URL=redis://redis-db:6379/0
       - GRPC_PORT=50055
+      - MS_DOCENTES_URL=ms-docentes:50053
     depends_on:
       - postgres-db
       - redis-db
@@ -57,7 +61,7 @@ services:
         - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/agm_notificaciones_db
         - SMTP_HOST=smtp4dev
         - MS_MATERIAS_URL=ms-materias:50052
-        - MS_ALUMNOS_URL=ms-auth:50053
+        - MS_ALUMNOS_URL=ms-docentes:50053
       ports:
         - "50056:50056"
       depends_on:
@@ -66,7 +70,9 @@ services:
 
   # MS-3 Docentes & Alumnos
   ms-docentes:
-    build: ./microservices/ms-docentes
+    build:
+      context: .
+      dockerfile: microservices/ms-docentes/Dockerfile
     container_name: agm_ms_docentes
     restart: always
     ports:
@@ -76,6 +82,42 @@ services:
       - DB_URL=postgresql://postgres:root@postgres-db:5432/agm_docentes_db
       - REST_PORT=8003
       - GRPC_PORT=50053
+    depends_on:
+      - postgres-db
+
+  ms-periodos-materias:
+    build:
+      context: ./microservices/ms-periodos-materias
+    container_name: agm_ms_periodos_materias
+    restart: always
+    env_file:
+      - ./microservices/ms-periodos-materias/.env
+    environment:
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_HOST=postgres-db
+      - DB_PORT=5432
+      - DB_NAME=agm_periodos_materias_db
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - GRPC_PORT=50052
+    ports:
+      - "8001:8000"
+      - "50052:50052"
+    depends_on:
+      - postgres-db
+  # MS-7 Reportes
+  ms-reportes:
+    build:
+      context: .
+      dockerfile: microservices/ms-reportes/Dockerfile
+    container_name: agm_ms_reportes
+    restart: always
+    ports:
+      - "8007:8007"
+      - "50057:50057"
+    environment:
+      - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/reports_db
+      - GRPC_PORT=50057
     depends_on:
       - postgres-db
 
