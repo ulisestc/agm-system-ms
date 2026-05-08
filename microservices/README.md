@@ -1,19 +1,19 @@
 # AGM Microservices
 
-Este repositorio contiene un solo microservicio del proyecto AGM para Servicios Web:
+Este repositorio contiene el microservicio unificado del proyecto AGM para Servicios Web:
 
 - `ms-periodos-materias`: CRUD de periodos académicos y materias.
 
-El servicio también expone un servidor gRPC en el puerto `50051` y los contratos quedan versionados en `/proto` en la raíz del proyecto.
+El servicio expone REST y gRPC. El servidor gRPC corre en el puerto `50052` y el contrato compartido queda versionado en `../proto/periodosmaterias.proto`.
 
-Todo corre sobre un único proyecto Django, una sola base de datos PostgreSQL y un solo despliegue en Docker.
+El despliegue usa una base de datos PostgreSQL independiente llamada `agm_periodos_materias_db`.
 
 ## Estructura
 
 - `ms-periodos-materias/`
-- `proto/`
-- `docker-compose.yml`
 - `archive/ms-materias/` para el servicio retirado
+- `../proto/periodosmaterias.proto`
+- `../docker-compose.yml`
 
 ## Requisitos
 
@@ -41,7 +41,7 @@ docker compose up --build
 Servicios expuestos:
 
 - `ms-periodos-materias`: `http://localhost:8001`
-- `ms-periodos-materias gRPC`: `localhost:50051`
+- `ms-periodos-materias gRPC`: `localhost:50052`
 
 Endpoints de salud:
 
@@ -165,4 +165,4 @@ cd ms-periodos-materias && python manage.py test
 ## Notas de arquitectura
 
 - `ms-periodos-materias` concentra periodos y materias en un único proceso.
-- El esquema de gRPC se mantiene versionado en `proto/` para la evolución del proyecto.
+- El esquema de gRPC se mantiene versionado en `../proto/periodosmaterias.proto` para la evolución del proyecto.

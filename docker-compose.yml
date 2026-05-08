@@ -79,5 +79,26 @@ services:
     depends_on:
       - postgres-db
 
+  ms-periodos-materias:
+    build:
+      context: ./microservices/ms-periodos-materias
+    container_name: agm_ms_periodos_materias
+    restart: always
+    env_file:
+      - ./microservices/ms-periodos-materias/.env
+    environment:
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_HOST=postgres-db
+      - DB_PORT=5432
+      - DB_NAME=agm_periodos_materias_db
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - GRPC_PORT=50052
+    ports:
+      - "8001:8000"
+      - "50052:50052"
+    depends_on:
+      - postgres-db
+
 volumes:
   agm_db_data:
