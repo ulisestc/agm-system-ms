@@ -1,0 +1,21 @@
+$kind: http-request
+name: Registrar Estadísticas de Materia Cerrada
+method: POST
+url: '{{base_url_reportes}}/estadisticas/registrar'
+order: 8000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "materia_id": "{{materia_id}}",
+      "materia_nombre": "Programación Web",
+      "materia_nrc": "NRC-001",
+      "periodo_nombre": "2025-1",
+      "docente_id": "{{docente_id}}",
+      "total_alumnos": 30,
+      "promedio_general": 8.5,
+      "porcentaje_aprobados": 90.0
+    }

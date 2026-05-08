@@ -1,0 +1,30 @@
+name: AGM-Local
+values:
+  - key: base_url_auth
+    value: 'http://localhost:8001'
+    enabled: true
+    type: default
+  - key: base_url_asistencias
+    value: 'http://localhost:8005'
+    enabled: true
+    type: default
+  - key: base_url_reportes
+    value: 'http://localhost:8007'
+    enabled: true
+    type: default
+  - key: materia_id
+    value: mat-001
+    enabled: true
+    type: default
+  - key: docente_id
+    value: doc-001
+    enabled: true
+    type: default
+  - key: alumno_id
+    value: alu-001
+    enabled: true
+    type: default
+  - key: token_qr
+    value: token-example-123
+    enabled: true
+    type: default

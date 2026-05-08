@@ -1,0 +1,8 @@
+$kind: http-request
+name: Asistencias de Hoy por Materia
+method: GET
+url: '{{base_url_asistencias}}/asistencias/:materia_id/hoy'
+order: 5000
+pathVariables:
+  - key: materia_id
+    value: '{{materia_id}}'

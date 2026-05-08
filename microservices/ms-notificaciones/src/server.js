@@ -38,12 +38,12 @@ const alumnosProto = grpc.loadPackageDefinition(alumnosPackageDef).alumnos;
 
 // instanciar clientes 
 const materiasCliente = new materiasProto.PeriodosMateriasService(
-    'localhost:50052', 
+    process.env.MS_MATERIAS_URL || 'localhost:50052', 
     grpc.credentials.createInsecure()
 );
 
 const alumnosCliente = new alumnosProto.DocentesAlumnosService(
-    'localhost:50053', 
+    process.env.MS_ALUMNOS_URL || 'localhost:50053', 
     grpc.credentials.createInsecure()
 );
 

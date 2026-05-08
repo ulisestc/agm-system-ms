@@ -1,0 +1,8 @@
+$kind: http-request
+name: Historial de Asistencias por Materia
+method: GET
+url: '{{base_url_asistencias}}/asistencias/:materia_id/historial'
+order: 6000
+pathVariables:
+  - key: materia_id
+    value: '{{materia_id}}'

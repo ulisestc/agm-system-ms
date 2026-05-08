@@ -1,0 +1,8 @@
+$kind: http-request
+name: Estadísticas de Docente
+method: GET
+url: '{{base_url_reportes}}/estadisticas/docente/:docente_id'
+order: 6000
+pathVariables:
+  - key: docente_id
+    value: '{{docente_id}}'

@@ -1,0 +1,11 @@
+$kind: http-request
+name: Descargar Reporte de Asistencias
+method: GET
+url: '{{base_url_reportes}}/reportes/asistencias/:materia_id'
+order: 4000
+queryParams:
+  - key: formato
+    value: pdf
+pathVariables:
+  - key: materia_id
+    value: '{{materia_id}}'

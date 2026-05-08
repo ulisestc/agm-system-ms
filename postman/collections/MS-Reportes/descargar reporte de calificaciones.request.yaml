@@ -1,0 +1,11 @@
+$kind: http-request
+name: Descargar Reporte de Calificaciones
+method: GET
+url: '{{base_url_reportes}}/reportes/calificaciones/:materia_id'
+order: 2000
+queryParams:
+  - key: formato
+    value: pdf
+pathVariables:
+  - key: materia_id
+    value: '{{materia_id}}'
