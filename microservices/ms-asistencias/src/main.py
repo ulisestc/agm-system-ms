@@ -9,6 +9,7 @@ from datetime import datetime
 from src.database import engine, Base, get_db, redis_client
 from src import grpc_server
 from src import models, schemas
+from src.grpc_client import validar_alumno_en_materia
 
 # Crear tablas en PostgreSQL si no existen
 Base.metadata.create_all(bind=engine)
@@ -73,6 +74,15 @@ def registrar_asistencia(req: schemas.RegistrarAsistenciaRequest, db: Session = 
     token_key = f"qr_usado:{req.token_qr}"
     if redis_client.exists(token_key):
         raise HTTPException(status_code=400, detail="Código QR inválido o ya utilizado (Anti-replay).")
+
+    # Consultar al MS-3 (Docentes) si el alumno pertenece a la materia
+    esta_inscrito = validar_alumno_en_materia(req.alumno_id, req.materia_id)
+    if not esta_inscrito:
+        raise HTTPException(
+            status_code=403, 
+            detail=f"El alumno {req.alumno_id} no está inscrito en la materia {req.materia_id}."
+        )
+    # ----------------------------
 
     # Verificar si hay sesión activa
     sesion_key = f"sesion_activa:{req.materia_id}"

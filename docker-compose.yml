@@ -39,6 +39,7 @@ services:
       - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/attendance_db
       - REDIS_URL=redis://redis-db:6379/0
       - GRPC_PORT=50055
+      - MS_DOCENTES_URL=ms-docentes:50053
     depends_on:
       - postgres-db
       - redis-db

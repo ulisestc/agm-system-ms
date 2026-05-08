@@ -9,11 +9,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY ./src ./src
 
 COPY asistencias.proto .
-RUN python -m grpc_tools.protoc -I. --python_out=./src --grpc_python_out=./src asistencias.proto
+COPY alumnosdocentes.proto .
 
-# --- EL ARREGLO MÁGICO ---
-# Reemplaza la importación rota por una importación relativa correcta
+RUN python -m grpc_tools.protoc -I. --python_out=./src --grpc_python_out=./src asistencias.proto
+RUN python -m grpc_tools.protoc -I. --python_out=./src --grpc_python_out=./src alumnosdocentes.proto
+
 RUN sed -i 's/import asistencias_pb2/from . import asistencias_pb2/g' ./src/asistencias_pb2_grpc.py
+RUN sed -i 's/import alumnosdocentes_pb2/from . import alumnosdocentes_pb2/g' ./src/alumnosdocentes_pb2_grpc.py
 
 EXPOSE 8005
 EXPOSE 50055
