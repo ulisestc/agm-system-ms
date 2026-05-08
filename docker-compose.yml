@@ -30,12 +30,16 @@ services:
 
   # MS-5 Asistencias QR
   ms-asistencias:
-    build: ./microservices/ms-asistencias
+    build:
+      context: .
+      dockerfile: microservices/ms-asistencias/Dockerfile
     container_name: agm_ms_asistencias
     restart: always
     ports:
       - "8005:8005"
       - "50055:50055"
+    env_file:
+      - ./microservices/ms-asistencias/.env
     environment:
       - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/attendance_db
       - REDIS_URL=redis://redis-db:6379/0

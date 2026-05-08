@@ -3,13 +3,13 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY microservices/ms-asistencias/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ./src ./src
+COPY microservices/ms-asistencias/src ./src
 
-COPY asistencias.proto .
-COPY alumnosdocentes.proto .
+COPY proto/asistencias.proto .
+COPY proto/alumnosdocentes.proto .
 
 RUN python -m grpc_tools.protoc -I. --python_out=./src --grpc_python_out=./src asistencias.proto
 RUN python -m grpc_tools.protoc -I. --python_out=./src --grpc_python_out=./src alumnosdocentes.proto
