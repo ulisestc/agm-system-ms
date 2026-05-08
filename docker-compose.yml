@@ -14,7 +14,6 @@ services:
     volumes:
       - agm_db_data:/var/lib/postgresql/data
       - ./infrastructure/init.sql:/docker-entrypoint-initdb.d/init.sql
-      
   smtp4dev:
     image: rnwood/smtp4dev
     container_name: agm_smtp
