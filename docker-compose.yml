@@ -1,3 +1,4 @@
+name: agm_system
 services:
   # Motor de Postgres para todos los microservicios
   postgres-db:
@@ -56,7 +57,7 @@ services:
         - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/agm_notificaciones_db
         - SMTP_HOST=smtp4dev
         - MS_MATERIAS_URL=ms-materias:50052
-        - MS_ALUMNOS_URL=ms-auth:50053
+        - MS_ALUMNOS_URL=ms-docentes:50053
       ports:
         - "50056:50056"
       depends_on:
