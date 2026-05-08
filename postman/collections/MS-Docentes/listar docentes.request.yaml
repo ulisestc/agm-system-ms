@@ -1,0 +1,5 @@
+$kind: http-request
+name: Listar Docentes
+method: GET
+url: '{{base_url_docentes}}/docentes/'
+order: 1200

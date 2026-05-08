@@ -1,0 +1,12 @@
+$kind: grpc-request
+name: MS-PeriodosMaterias: ListMateriasByPeriodo
+url: 'grpc://{{base_url_periodos_grpc}}'
+service: agm.periodosmaterias.v1.PeriodosMateriasService
+method: ListMateriasByPeriodo
+order: 2000
+body:
+  type: json
+  content: |-
+    {
+      "periodo_id": 1
+    }

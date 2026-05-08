@@ -1,0 +1,14 @@
+$kind: http-request
+name: Importar Alumnos desde Excel
+method: POST
+url: '{{base_url_docentes}}/alumnos/importar/{{materia_id}}'
+order: 1300
+headers:
+  - key: Content-Type
+    value: multipart/form-data
+body:
+  type: formdata
+  content:
+    - key: archivo
+      type: file
+      src: './fixtures/alumnos-inscritos.xlsx'

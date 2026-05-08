@@ -1,7 +1,7 @@
 name: AGM-Local
 values:
   - key: base_url_auth
-    value: 'http://localhost:8001'
+    value: 'http://localhost:8002'
     enabled: true
     type: default
   - key: base_url_asistencias
@@ -26,5 +26,33 @@ values:
     type: default
   - key: token_qr
     value: token-example-123
+    enabled: true
+    type: default
+  - key: base_url_docentes
+    value: 'http://localhost:8003'
+    enabled: true
+    type: default
+  - key: base_url_periodos
+    value: 'http://localhost:8001'
+    enabled: true
+    type: default
+  - key: base_url_notificaciones_grpc
+    value: 'localhost:50056'
+    enabled: true
+    type: default
+  - key: base_url_docentes_grpc
+    value: 'localhost:50053'
+    enabled: true
+    type: default
+  - key: base_url_periodos_grpc
+    value: 'localhost:50052'
+    enabled: true
+    type: default
+  - key: base_url_asistencias_grpc
+    value: 'localhost:50055'
+    enabled: true
+    type: default
+  - key: base_url_reportes_grpc
+    value: 'localhost:50057'
     enabled: true
     type: default

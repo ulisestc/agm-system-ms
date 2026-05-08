@@ -1,0 +1,5 @@
+$kind: http-request
+name: Listar Periodos
+method: GET
+url: '{{base_url_periodos}}/api/periodos/?page=1&limit=10'
+order: 1200

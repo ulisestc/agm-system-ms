@@ -1,0 +1,5 @@
+$kind: http-request
+name: Listar Alumnos por Materia
+method: GET
+url: '{{base_url_docentes}}/alumnos/materia/{{materia_id}}'
+order: 1400

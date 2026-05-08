@@ -1,0 +1,5 @@
+$kind: http-request
+name: Activar Periodo
+method: POST
+url: '{{base_url_periodos}}/api/periodos/1/activar/'
+order: 1400
