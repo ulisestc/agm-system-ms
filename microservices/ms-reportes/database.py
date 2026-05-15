@@ -3,10 +3,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
-SQLALCHEMY_DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:root@localhost:5432/reports_db"
-)
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+if not SQLALCHEMY_DATABASE_URL:
+    raise RuntimeError("La variable de entorno DATABASE_URL no está definida. Revisa tu archivo .env")
 
 # Motor de conexión a PostgreSQL
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

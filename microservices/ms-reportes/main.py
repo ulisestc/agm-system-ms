@@ -1,5 +1,7 @@
 import os
 import threading
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -11,26 +13,45 @@ from generadores import (
     generar_excel_asistencias,    generar_pdf_asistencias,
 )
 
-# Crear tablas si no existen
 Base.metadata.create_all(bind=engine)
+
+
+def _start_grpc():
+    try:
+        import grpc_server
+        grpc_server.serve()
+    except Exception as e:
+        print(f"[WARNING] No se pudo iniciar el servidor gRPC: {e}")
+        print("          Ejecuta generate_grpc.py para generar los stubs.")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    grpc_thread = threading.Thread(target=_start_grpc, daemon=True)
+    grpc_thread.start()
+    yield
+
 
 app = FastAPI(
     title="MS-7 Reportes & Estadísticas",
     description="Microservicio de Reportes y Estadísticas para el sistema AGM — BUAP FCC",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
-@app.get("/")
+# ── Health check ──────────────────────────────────────────────────────────────
+
+@app.get("/", tags=["Health"])
 def read_root():
     return {"mensaje": "¡El microservicio de Reportes está corriendo!", "servicio": "ms-reportes"}
 
 
-# Reportes- Calificaciones
+# ── Reportes – Calificaciones ─────────────────────────────────────────────────
 
 @app.get(
     "/reportes/calificaciones/{materia_id}",
-    summary="Descargar reporte de calificaciones",
+    summary="Descargar reporte de calificaciones (datos demo)",
     tags=["Reportes"],
 )
 def reporte_calificaciones(
@@ -38,7 +59,6 @@ def reporte_calificaciones(
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
 ):
-
     try:
         if formato == "xls":
             file_bytes, filename = generar_excel_calificaciones(materia_id)
@@ -47,13 +67,7 @@ def reporte_calificaciones(
             file_bytes, filename = generar_pdf_calificaciones(materia_id)
             media_type = "application/pdf"
 
-        # Registrar en el historial de reportes generados
-        nuevo_reporte = models.ReporteGenerado(
-            materia_id=materia_id,
-            tipo="calificaciones",
-            formato=formato,
-        )
-        db.add(nuevo_reporte)
+        db.add(models.ReporteGenerado(materia_id=materia_id, tipo="calificaciones", formato=formato))
         db.commit()
 
         return Response(
@@ -72,12 +86,16 @@ def reporte_calificaciones(
 )
 def reporte_calificaciones_con_datos(
     materia_id: str,
-    datos: dict,
+    body: schemas.DatosCalificacionesReporte,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
 ):
     try:
+        datos = body.model_dump()
         datos["materia_id"] = materia_id
+        # Convertir la lista de alumnos a dicts simples para el generador
+        datos["alumnos"] = [a.model_dump() for a in body.alumnos]
+
         if formato == "xls":
             file_bytes, filename = generar_excel_calificaciones(materia_id, datos)
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -85,13 +103,12 @@ def reporte_calificaciones_con_datos(
             file_bytes, filename = generar_pdf_calificaciones(materia_id, datos)
             media_type = "application/pdf"
 
-        nuevo_reporte = models.ReporteGenerado(
+        db.add(models.ReporteGenerado(
             materia_id=materia_id,
-            docente_id=datos.get("docente_id"),
+            docente_id=body.docente_id,
             tipo="calificaciones",
             formato=formato,
-        )
-        db.add(nuevo_reporte)
+        ))
         db.commit()
 
         return Response(
@@ -103,11 +120,11 @@ def reporte_calificaciones_con_datos(
         raise HTTPException(status_code=500, detail=f"Error al generar el reporte: {str(e)}")
 
 
-# Reportes - Asistencias
+# ── Reportes – Asistencias ────────────────────────────────────────────────────
 
 @app.get(
     "/reportes/asistencias/{materia_id}",
-    summary="Descargar reporte de asistencias",
+    summary="Descargar reporte de asistencias (datos demo)",
     tags=["Reportes"],
 )
 def reporte_asistencias(
@@ -123,12 +140,7 @@ def reporte_asistencias(
             file_bytes, filename = generar_pdf_asistencias(materia_id)
             media_type = "application/pdf"
 
-        nuevo_reporte = models.ReporteGenerado(
-            materia_id=materia_id,
-            tipo="asistencias",
-            formato=formato,
-        )
-        db.add(nuevo_reporte)
+        db.add(models.ReporteGenerado(materia_id=materia_id, tipo="asistencias", formato=formato))
         db.commit()
 
         return Response(
@@ -147,11 +159,14 @@ def reporte_asistencias(
 )
 def reporte_asistencias_con_datos(
     materia_id: str,
-    datos: dict,
+    body: schemas.DatosAsistenciasReporte,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
 ):
     try:
+        datos = body.model_dump()
+        datos["materia_id"] = materia_id
+
         if formato == "xls":
             file_bytes, filename = generar_excel_asistencias(materia_id, datos)
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -159,13 +174,12 @@ def reporte_asistencias_con_datos(
             file_bytes, filename = generar_pdf_asistencias(materia_id, datos)
             media_type = "application/pdf"
 
-        nuevo_reporte = models.ReporteGenerado(
+        db.add(models.ReporteGenerado(
             materia_id=materia_id,
-            docente_id=datos.get("docente_id"),
+            docente_id=body.docente_id,
             tipo="asistencias",
             formato=formato,
-        )
-        db.add(nuevo_reporte)
+        ))
         db.commit()
 
         return Response(
@@ -177,19 +191,15 @@ def reporte_asistencias_con_datos(
         raise HTTPException(status_code=500, detail=f"Error al generar el reporte: {str(e)}")
 
 
-# Estadísticas - Docente
+# ── Estadísticas – Docente ────────────────────────────────────────────────────
 
 @app.get(
     "/estadisticas/docente/{docente_id}",
     response_model=schemas.RespuestaListaEstadisticas,
-    summary="Historial de estadísticas de un docente",
+    summary="Historial de estadísticas de un docente por periodo",
     tags=["Estadísticas"],
 )
-def estadisticas_docente(
-    docente_id: str,
-    db: Session = Depends(get_db),
-):
-
+def estadisticas_docente(docente_id: str, db: Session = Depends(get_db)):
     registros = (
         db.query(models.EstadisticaMateria)
         .filter(models.EstadisticaMateria.docente_id == docente_id)
@@ -200,24 +210,6 @@ def estadisticas_docente(
         "success": True,
         "message": f"{len(registros)} registro(s) encontrados para el docente {docente_id}",
         "data": registros,
-    }
-
-
-# Estadísticas - Alumno
-
-@app.get(
-    "/estadisticas/alumno/{alumno_id}",
-    summary="Estadísticas de un alumno por materia",
-    tags=["Estadísticas"],
-)
-def estadisticas_alumno(alumno_id: str):
-    return {
-        "success": True,
-        "message": f"Estadísticas del alumno {alumno_id}",
-        "data": {
-            "alumno_id": alumno_id,
-            "nota": "Conectar con ms-calificaciones y ms-asistencias vía Gateway para datos reales"
-        }
     }
 
 
@@ -232,23 +224,58 @@ def registrar_estadisticas(
     estadistica: schemas.EstadisticaMateriaCreate,
     db: Session = Depends(get_db),
 ):
-
     nuevo = models.EstadisticaMateria(**estadistica.model_dump())
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
+    return {"success": True, "message": "Estadísticas registradas correctamente", "data": nuevo}
+
+
+# ── Estadísticas – Alumno ─────────────────────────────────────────────────────
+
+@app.get(
+    "/estadisticas/alumno/{alumno_id}",
+    response_model=schemas.RespuestaListaEstadisticasAlumno,
+    summary="Estadísticas de un alumno por materia (historial)",
+    tags=["Estadísticas"],
+)
+def estadisticas_alumno(alumno_id: str, db: Session = Depends(get_db)):
+    registros = (
+        db.query(models.EstadisticaAlumno)
+        .filter(models.EstadisticaAlumno.alumno_id == alumno_id)
+        .order_by(models.EstadisticaAlumno.fecha_registro.desc())
+        .all()
+    )
     return {
         "success": True,
-        "message": "Estadísticas registradas correctamente",
-        "data": nuevo,
+        "message": f"{len(registros)} materia(s) encontradas para el alumno {alumno_id}",
+        "data": registros,
     }
 
 
-# Historial de reportes generados
+@app.post(
+    "/estadisticas/alumno/registrar",
+    response_model=schemas.RespuestaEstadisticaAlumno,
+    status_code=201,
+    summary="Registrar estadísticas de un alumno en una materia",
+    tags=["Estadísticas"],
+)
+def registrar_estadisticas_alumno(
+    estadistica: schemas.EstadisticaAlumnoCreate,
+    db: Session = Depends(get_db),
+):
+    nuevo = models.EstadisticaAlumno(**estadistica.model_dump())
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+    return {"success": True, "message": "Estadísticas del alumno registradas correctamente", "data": nuevo}
+
+
+# ── Historial de reportes generados ──────────────────────────────────────────
 
 @app.get(
     "/reportes/historial",
-    summary="Historial de todos los reportes generados",
+    summary="Historial paginado de todos los reportes generados",
     tags=["Reportes"],
 )
 def historial_reportes(
@@ -256,7 +283,6 @@ def historial_reportes(
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    """Lista paginada de reportes generados (auditoría)."""
     offset = (page - 1) * limit
     total  = db.query(models.ReporteGenerado).count()
     items  = db.query(models.ReporteGenerado).offset(offset).limit(limit).all()
@@ -268,21 +294,5 @@ def historial_reportes(
             "page":  page,
             "limit": limit,
             "items": [schemas.ReporteGeneradoResponse.model_validate(i) for i in items],
-        }
+        },
     }
-
-
-# Levanta el gRPC en un hilo separado
-
-def _start_grpc():
-    try:
-        import grpc_server
-        grpc_server.serve()
-    except Exception as e:
-        print(f"[WARNING] No se pudo iniciar el servidor gRPC: {e}")
-        print("          Asegúrate de haber generado los stubs con grpc_tools.protoc")
-
-@app.on_event("startup")
-def startup_event():
-    grpc_thread = threading.Thread(target=_start_grpc, daemon=True)
-    grpc_thread.start()

@@ -31,3 +31,19 @@ class EstadisticaMateria(Base):
     promedio_general      = Column(Float, default=0.0)
     porcentaje_aprobados  = Column(Float, default=0.0)  # 0-100
     fecha_registro        = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class EstadisticaAlumno(Base):
+    __tablename__ = "estadisticas_alumno"
+
+    id                      = Column(Integer, primary_key=True, index=True)
+    alumno_id               = Column(String, nullable=False, index=True)
+    materia_id              = Column(String, nullable=False)
+    materia_nombre          = Column(String, nullable=False)
+    materia_nrc             = Column(String, nullable=False)
+    periodo_nombre          = Column(String, nullable=False)
+    porcentaje_asistencia   = Column(Float, default=0.0)   # 0-100
+    promedio_calificaciones = Column(Float, default=0.0)   # 0-10
+    total_sesiones          = Column(Integer, default=0)
+    sesiones_presentes      = Column(Integer, default=0)
+    fecha_registro          = Column(DateTime(timezone=True), server_default=func.now())

@@ -22,6 +22,7 @@ service ReportesService {
 message ReportRequest {
     string materiaId  = 1;  // ID de la materia
     string formato    = 2;  // "pdf" o "xls"
+    string datos_json = 3;  // JSON serializado con datos reales (opcional; vacío → datos demo)
 }
 
 message DocenteIdRequest {

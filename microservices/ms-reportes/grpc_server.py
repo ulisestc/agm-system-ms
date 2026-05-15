@@ -1,9 +1,9 @@
+import json
 import os
-import io
-import grpc
 import logging
 from concurrent import futures
-from pathlib import Path
+
+import grpc
 
 import reportes_pb2
 import reportes_pb2_grpc
@@ -17,16 +17,33 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("[gRPC ms-reportes]")
 
 
+def _parse_datos(datos_json: str) -> dict | None:
+    """Deserializa datos_json; devuelve None si está vacío o es inválido."""
+    if not datos_json:
+        return None
+    try:
+        return json.loads(datos_json)
+    except json.JSONDecodeError:
+        logger.warning("datos_json no es JSON válido; se usarán datos demo.")
+        return None
+
+
 class ReportesServicer(reportes_pb2_grpc.ReportesServiceServicer):
 
     def GenerateCalificacionesReport(self, request, context):
-        logger.info(f"Petición recibida: GenerateCalificacionesReport | materia={request.materiaId} | formato={request.formato}")
+        logger.info(
+            f"Petición recibida: GenerateCalificacionesReport | "
+            f"materia={request.materiaId} | formato={request.formato} | "
+            f"datos={'sí' if request.datos_json else 'demo'}"
+        )
         try:
+            datos = _parse_datos(request.datos_json)
+
             if request.formato == "xls":
-                file_bytes, filename = generar_excel_calificaciones(request.materiaId)
+                file_bytes, filename = generar_excel_calificaciones(request.materiaId, datos)
                 content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             else:
-                file_bytes, filename = generar_pdf_calificaciones(request.materiaId)
+                file_bytes, filename = generar_pdf_calificaciones(request.materiaId, datos)
                 content_type = "application/pdf"
 
             return reportes_pb2.ReportResponse(
@@ -34,7 +51,7 @@ class ReportesServicer(reportes_pb2_grpc.ReportesServiceServicer):
                 file_bytes=file_bytes,
                 filename=filename,
                 content_type=content_type,
-                error_message=""
+                error_message="",
             )
         except Exception as e:
             logger.error(f"Error en GenerateCalificacionesReport: {e}")
@@ -43,17 +60,23 @@ class ReportesServicer(reportes_pb2_grpc.ReportesServiceServicer):
                 file_bytes=b"",
                 filename="",
                 content_type="",
-                error_message=str(e)
+                error_message=str(e),
             )
 
     def GenerateAsistenciasReport(self, request, context):
-        logger.info(f"Petición recibida: GenerateAsistenciasReport | materia={request.materiaId} | formato={request.formato}")
+        logger.info(
+            f"Petición recibida: GenerateAsistenciasReport | "
+            f"materia={request.materiaId} | formato={request.formato} | "
+            f"datos={'sí' if request.datos_json else 'demo'}"
+        )
         try:
+            datos = _parse_datos(request.datos_json)
+
             if request.formato == "xls":
-                file_bytes, filename = generar_excel_asistencias(request.materiaId)
+                file_bytes, filename = generar_excel_asistencias(request.materiaId, datos)
                 content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             else:
-                file_bytes, filename = generar_pdf_asistencias(request.materiaId)
+                file_bytes, filename = generar_pdf_asistencias(request.materiaId, datos)
                 content_type = "application/pdf"
 
             return reportes_pb2.ReportResponse(
@@ -61,7 +84,7 @@ class ReportesServicer(reportes_pb2_grpc.ReportesServiceServicer):
                 file_bytes=file_bytes,
                 filename=filename,
                 content_type=content_type,
-                error_message=""
+                error_message="",
             )
         except Exception as e:
             logger.error(f"Error en GenerateAsistenciasReport: {e}")
@@ -70,7 +93,7 @@ class ReportesServicer(reportes_pb2_grpc.ReportesServiceServicer):
                 file_bytes=b"",
                 filename="",
                 content_type="",
-                error_message=str(e)
+                error_message=str(e),
             )
 
     def GetHistorialDocente(self, request, context):
@@ -92,7 +115,7 @@ class ReportesServicer(reportes_pb2_grpc.ReportesServiceServicer):
                     materia_nrc=r.materia_nrc,
                     total_alumnos=r.total_alumnos,
                     promedio_general=r.promedio_general,
-                    porcentaje_aprobados=r.porcentaje_aprobados
+                    porcentaje_aprobados=r.porcentaje_aprobados,
                 )
                 for r in registros
             ]
@@ -100,14 +123,14 @@ class ReportesServicer(reportes_pb2_grpc.ReportesServiceServicer):
             return reportes_pb2.HistorialDocenteResponse(
                 success=True,
                 periodos=periodos,
-                error_message=""
+                error_message="",
             )
         except Exception as e:
             logger.error(f"Error en GetHistorialDocente: {e}")
             return reportes_pb2.HistorialDocenteResponse(
                 success=False,
                 periodos=[],
-                error_message=str(e)
+                error_message=str(e),
             )
 
 
