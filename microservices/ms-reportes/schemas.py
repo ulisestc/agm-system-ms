@@ -133,17 +133,33 @@ class RespuestaEstadistica(RespuestaBase):
     data: Optional[EstadisticaMateriaResponse] = None
 
 
-class RespuestaListaEstadisticas(RespuestaBase):
-    data: Optional[List[EstadisticaMateriaResponse]] = None
-
-
 class RespuestaEstadisticaAlumno(RespuestaBase):
     data: Optional[EstadisticaAlumnoResponse] = None
 
 
-class RespuestaListaEstadisticasAlumno(RespuestaBase):
-    data: Optional[List[EstadisticaAlumnoResponse]] = None
-
-
 class RespuestaReporte(RespuestaBase):
     data: Optional[ReporteGeneradoResponse] = None
+
+
+# ── Respuestas paginadas ──────────────────────────────────────────────────────
+
+class PaginaEstadisticasMateria(BaseModel):
+    total: int
+    page:  int
+    limit: int
+    items: List[EstadisticaMateriaResponse]
+
+
+class RespuestaPaginadaEstadisticasMateria(RespuestaBase):
+    data: Optional[PaginaEstadisticasMateria] = None
+
+
+class PaginaEstadisticasAlumno(BaseModel):
+    total: int
+    page:  int
+    limit: int
+    items: List[EstadisticaAlumnoResponse]
+
+
+class RespuestaPaginadaEstadisticasAlumno(RespuestaBase):
+    data: Optional[PaginaEstadisticasAlumno] = None

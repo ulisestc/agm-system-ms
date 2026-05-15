@@ -3,10 +3,12 @@ import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from database import engine, Base, get_db
+from auth import get_current_user, require_roles
 import models, schemas
 from generadores import (
     generar_excel_calificaciones, generar_pdf_calificaciones,
@@ -39,8 +41,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── CORS ──────────────────────────────────────────────────────────────────────
 
-# ── Health check ──────────────────────────────────────────────────────────────
+_cors_origins = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "http://localhost:4200").split(",")
+    if o.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+
+# ── Health check (público) ───────────────────────────────────────────────────
 
 @app.get("/", tags=["Health"])
 def read_root():
@@ -58,6 +76,7 @@ def reporte_calificaciones(
     materia_id: str,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente")),
 ):
     try:
         if formato == "xls":
@@ -89,11 +108,11 @@ def reporte_calificaciones_con_datos(
     body: schemas.DatosCalificacionesReporte,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente")),
 ):
     try:
         datos = body.model_dump()
         datos["materia_id"] = materia_id
-        # Convertir la lista de alumnos a dicts simples para el generador
         datos["alumnos"] = [a.model_dump() for a in body.alumnos]
 
         if formato == "xls":
@@ -131,6 +150,7 @@ def reporte_asistencias(
     materia_id: str,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente")),
 ):
     try:
         if formato == "xls":
@@ -162,6 +182,7 @@ def reporte_asistencias_con_datos(
     body: schemas.DatosAsistenciasReporte,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente")),
 ):
     try:
         datos = body.model_dump()
@@ -195,21 +216,28 @@ def reporte_asistencias_con_datos(
 
 @app.get(
     "/estadisticas/docente/{docente_id}",
-    response_model=schemas.RespuestaListaEstadisticas,
-    summary="Historial de estadísticas de un docente por periodo",
+    response_model=schemas.RespuestaPaginadaEstadisticasMateria,
+    summary="Historial paginado de estadísticas de un docente por periodo",
     tags=["Estadísticas"],
 )
-def estadisticas_docente(docente_id: str, db: Session = Depends(get_db)):
-    registros = (
-        db.query(models.EstadisticaMateria)
-        .filter(models.EstadisticaMateria.docente_id == docente_id)
-        .order_by(models.EstadisticaMateria.fecha_registro.desc())
-        .all()
+def estadisticas_docente(
+    docente_id: str,
+    page:  int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente")),
+):
+    offset = (page - 1) * limit
+    query  = db.query(models.EstadisticaMateria).filter(
+        models.EstadisticaMateria.docente_id == docente_id
     )
+    total    = query.count()
+    registros = query.order_by(models.EstadisticaMateria.fecha_registro.desc()).offset(offset).limit(limit).all()
+
     return {
         "success": True,
-        "message": f"{len(registros)} registro(s) encontrados para el docente {docente_id}",
-        "data": registros,
+        "message": f"{total} registro(s) encontrados para el docente {docente_id}",
+        "data": {"total": total, "page": page, "limit": limit, "items": registros},
     }
 
 
@@ -223,6 +251,7 @@ def estadisticas_docente(docente_id: str, db: Session = Depends(get_db)):
 def registrar_estadisticas(
     estadistica: schemas.EstadisticaMateriaCreate,
     db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin")),
 ):
     nuevo = models.EstadisticaMateria(**estadistica.model_dump())
     db.add(nuevo)
@@ -235,21 +264,28 @@ def registrar_estadisticas(
 
 @app.get(
     "/estadisticas/alumno/{alumno_id}",
-    response_model=schemas.RespuestaListaEstadisticasAlumno,
-    summary="Estadísticas de un alumno por materia (historial)",
+    response_model=schemas.RespuestaPaginadaEstadisticasAlumno,
+    summary="Estadísticas paginadas de un alumno por materia",
     tags=["Estadísticas"],
 )
-def estadisticas_alumno(alumno_id: str, db: Session = Depends(get_db)):
-    registros = (
-        db.query(models.EstadisticaAlumno)
-        .filter(models.EstadisticaAlumno.alumno_id == alumno_id)
-        .order_by(models.EstadisticaAlumno.fecha_registro.desc())
-        .all()
+def estadisticas_alumno(
+    alumno_id: str,
+    page:  int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente", "alumno")),
+):
+    offset = (page - 1) * limit
+    query  = db.query(models.EstadisticaAlumno).filter(
+        models.EstadisticaAlumno.alumno_id == alumno_id
     )
+    total     = query.count()
+    registros = query.order_by(models.EstadisticaAlumno.fecha_registro.desc()).offset(offset).limit(limit).all()
+
     return {
         "success": True,
-        "message": f"{len(registros)} materia(s) encontradas para el alumno {alumno_id}",
-        "data": registros,
+        "message": f"{total} materia(s) encontradas para el alumno {alumno_id}",
+        "data": {"total": total, "page": page, "limit": limit, "items": registros},
     }
 
 
@@ -263,6 +299,7 @@ def estadisticas_alumno(alumno_id: str, db: Session = Depends(get_db)):
 def registrar_estadisticas_alumno(
     estadistica: schemas.EstadisticaAlumnoCreate,
     db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin")),
 ):
     nuevo = models.EstadisticaAlumno(**estadistica.model_dump())
     db.add(nuevo)
@@ -282,6 +319,7 @@ def historial_reportes(
     page:  int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin")),
 ):
     offset = (page - 1) * limit
     total  = db.query(models.ReporteGenerado).count()
