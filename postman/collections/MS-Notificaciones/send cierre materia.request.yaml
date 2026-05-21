@@ -1,0 +1,22 @@
+$kind: grpc-request
+name: Send Cierre Materia
+url: grpc://{{base_url_notificaciones_grpc}}
+service: notificaciones.NotificacionesService
+method: SendCierreMateria
+methodPath: notificaciones.NotificacionesService.SendCierreMateria
+methodDescriptor: CpcCChRub3RpZmljYWNpb25lcy5wcm90bxIObm90aWZpY2FjaW9uZXMiLQoUQ2llcnJlTWF0ZXJpYVJlcXVlc3QSFQoJbWF0ZXJpYUlkGAEgASgJQgIQASJGChROb3RpZmljYWNpb25SZXNwb25zZRITCgdzdWNjZXNzGAEgASgIQgIQARIZCg1lcnJvcl9tZXNzYWdlGAIgASgJQgIQATJ4ChVOb3RpZmljYWNpb25lc1NlcnZpY2USXwoRU2VuZENpZXJyZU1hdGVyaWESJC5ub3RpZmljYWNpb25lcy5DaWVycmVNYXRlcmlhUmVxdWVzdBokLm5vdGlmaWNhY2lvbmVzLk5vdGlmaWNhY2lvblJlc3BvbnNl
+message:
+  content: |-
+    {
+      "materiaId": "mat-001"
+    }
+schema:
+  source: specification
+  specificationId: L2hvbWUvdWxpc2VzdGMvRG9jdW1lbnRzL2FnbS1zeXN0ZW0tbXMvcHJvdG8vbm90aWZpY2FjaW9uZXMucHJvdG8
+order: 1200
+body:
+  type: json
+  content: |-
+    {
+      "materiaId": "mat-001"
+    }

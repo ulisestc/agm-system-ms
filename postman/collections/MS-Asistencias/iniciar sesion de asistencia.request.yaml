@@ -1,0 +1,15 @@
+$kind: http-request
+name: Iniciar Sesión de Asistencia
+method: POST
+url: '{{base_url_asistencias}}/sesiones/iniciar'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "materia_id": "{{materia_id}}",
+      "docente_id": "{{docente_id}}"
+    }

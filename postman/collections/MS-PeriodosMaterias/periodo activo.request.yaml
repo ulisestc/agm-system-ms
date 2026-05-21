@@ -1,0 +1,5 @@
+$kind: http-request
+name: Obtener Periodo Activo
+method: GET
+url: '{{base_url_periodos}}/api/periodos/activo/'
+order: 1300

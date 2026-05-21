@@ -1,0 +1,10 @@
+$kind: http-request
+name: Historial de Reportes Generados
+method: GET
+url: '{{base_url_reportes}}/reportes/historial'
+order: 9000
+queryParams:
+  - key: page
+    value: '1'
+  - key: limit
+    value: '10'

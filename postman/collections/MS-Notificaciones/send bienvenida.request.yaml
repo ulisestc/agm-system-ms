@@ -1,0 +1,26 @@
+$kind: grpc-request
+name: Send Bienvenida
+url: grpc://{{base_url_notificaciones_grpc}}
+service: notificaciones.NotificacionesService
+method: SendBienvenida
+methodPath: notificaciones.NotificacionesService.SendBienvenida
+methodDescriptor: CrwCChRub3RpZmljYWNpb25lcy5wcm90bxIObm90aWZpY2FjaW9uZXMiWAoRQmllbnZlbmlkYVJlcXVlc3QSFAoIYWx1bW5vSWQYASABKAlCAhABEhUKCW1hdGVyaWFJZBgCIAEoCUICEAESFgoKY2xhdmVVbmljYRgDIAEoCUICEAEiRgoUTm90aWZpY2FjaW9uUmVzcG9uc2USEwoHc3VjY2VzcxgBIAEoCEICEAESGQoNZXJyb3JfbWVzc2FnZRgCIAEoCUICEAEycgoVTm90aWZpY2FjaW9uZXNTZXJ2aWNlElkKDlNlbmRCaWVudmVuaWRhEiEubm90aWZpY2FjaW9uZXMuQmllbnZlbmlkYVJlcXVlc3QaJC5ub3RpZmljYWNpb25lcy5Ob3RpZmljYWNpb25SZXNwb25zZQ==
+message:
+  content: |-
+    {
+      "alumnoId": "alu-001",
+      "materiaId": "mat-001",
+      "claveUnica": "AGM-12345"
+    }
+schema:
+  source: specification
+  specificationId: L2hvbWUvdWxpc2VzdGMvRG9jdW1lbnRzL2FnbS1zeXN0ZW0tbXMvcHJvdG8vbm90aWZpY2FjaW9uZXMucHJvdG8
+order: 1000
+body:
+  type: json
+  content: |-
+    {
+      "alumnoId": "alu-001",
+      "materiaId": "mat-001",
+      "claveUnica": "AGM-12345"
+    }

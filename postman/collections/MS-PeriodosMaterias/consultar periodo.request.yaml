@@ -1,0 +1,5 @@
+$kind: http-request
+name: Consultar Periodo por ID
+method: GET
+url: '{{base_url_periodos}}/api/periodos/1/'
+order: 1500

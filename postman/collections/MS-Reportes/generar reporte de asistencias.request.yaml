@@ -1,0 +1,21 @@
+$kind: http-request
+name: Generar Reporte de Asistencias
+method: POST
+url: '{{base_url_reportes}}/reportes/asistencias/:materia_id'
+order: 5000
+headers:
+  - key: Content-Type
+    value: application/json
+queryParams:
+  - key: formato
+    value: pdf
+pathVariables:
+  - key: materia_id
+    value: '{{materia_id}}'
+body:
+  type: json
+  content: |-
+    {
+      "docente_id": "{{docente_id}}",
+      "sesiones": []
+    }

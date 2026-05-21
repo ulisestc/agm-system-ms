@@ -1,0 +1,13 @@
+$kind: grpc-request
+name: MS-Reportes: GenerateAsistenciasReport
+url: 'grpc://{{base_url_reportes_grpc}}'
+service: reportes.ReportesService
+method: GenerateAsistenciasReport
+order: 2500
+body:
+  type: json
+  content: |-
+    {
+      "materiaId": "{{materia_id}}",
+      "formato": "pdf"
+    }

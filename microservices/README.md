@@ -1,20 +1,19 @@
 # AGM Microservices
 
-Este repositorio contiene dos microservicios del proyecto AGM para Servicios Web:
+Este repositorio contiene el microservicio unificado del proyecto AGM para Servicios Web:
 
-- `ms-periodos`: CRUD de periodos académicos.
-- `ms-materias`: CRUD de materias independientes.
+- `ms-periodos-materias`: CRUD de periodos académicos y materias.
 
-`ms-periodos` expone también un servidor gRPC en el puerto `50051`, y `ms-materias` lo consulta para validar que el `periodo_id` exista antes de crear o actualizar una materia.
+El servicio expone REST y gRPC. El servidor gRPC corre en el puerto `50052` y el contrato compartido queda versionado en `../proto/periodosmaterias.proto`.
 
-Cada servicio tiene su propio proyecto Django, su propia base de datos PostgreSQL y su propio despliegue en Docker.
+El despliegue usa una base de datos PostgreSQL independiente llamada `agm_periodos_materias_db`.
 
 ## Estructura
 
-- `ms-periodos/`
-- `ms-materias/`
-- `proto/`
-- `docker-compose.yml`
+- `ms-periodos-materias/`
+- `archive/ms-materias/` para el servicio retirado
+- `../proto/periodosmaterias.proto`
+- `../docker-compose.yml`
 
 ## Requisitos
 
@@ -23,16 +22,15 @@ Cada servicio tiene su propio proyecto Django, su propia base de datos PostgreSQ
 
 ## Configuración local
 
-1. Copia los archivos de ejemplo:
+1. Copia el archivo de ejemplo:
 
 ```bash
-cp ms-periodos/.env.example ms-periodos/.env
-cp ms-materias/.env.example ms-materias/.env
+cp ms-periodos-materias/.env.example ms-periodos-materias/.env
 ```
 
-2. Si vas a correr con Docker, puedes dejar los valores tal como están en este repositorio porque `docker-compose.yml` sobrescribe la conexión a la base de datos con los nombres de servicio internos.
+2. Si vas a correr con Docker, puedes dejar los valores tal como están en este repositorio porque `docker-compose.yml` sobrescribe la conexión a la base de datos con el contenedor interno.
 
-3. Si vas a correr cada microservicio directamente en tu máquina, cambia `DB_HOST` a `localhost` y usa una instancia propia de PostgreSQL.
+3. Si vas a correr el servicio directamente en tu máquina, cambia `DB_HOST` a `localhost` y usa una instancia propia de PostgreSQL.
 
 ## Levantar todo con un comando
 
@@ -42,30 +40,19 @@ docker compose up --build
 
 Servicios expuestos:
 
-- `ms-periodos`: `http://localhost:8001`
-- `ms-materias`: `http://localhost:8002`
-- `ms-periodos gRPC`: `localhost:50051`
+- `ms-periodos-materias`: `http://localhost:8001`
+- `ms-periodos-materias gRPC`: `localhost:50052`
 
 Endpoints de salud:
 
 - `http://localhost:8001/health/`
-- `http://localhost:8002/health/`
 
 ## Ejecutar sin Docker
 
-### `ms-periodos`
+### `ms-periodos-materias`
 
 ```bash
-cd ms-periodos
-pip install -r requirements.txt
-python manage.py migrate --run-syncdb
-python manage.py runserver 0.0.0.0:8000
-```
-
-### `ms-materias`
-
-```bash
-cd ms-materias
+cd ms-periodos-materias
 pip install -r requirements.txt
 python manage.py migrate --run-syncdb
 python manage.py runserver 0.0.0.0:8000
@@ -107,10 +94,10 @@ curl -X POST http://localhost:8001/api/periodos/1/activar/
 
 ### 5. Crear una materia
 
-Antes de crear una materia, asegúrate de haber creado un periodo válido. `ms-materias` consulta a `ms-periodos` por gRPC y rechazará el registro si el `periodo_id` no existe.
+Antes de crear una materia, asegúrate de haber creado un periodo válido. El servicio valida que el `periodo_id` exista antes de guardar el registro.
 
 ```bash
-curl -X POST http://localhost:8002/api/materias/ \
+curl -X POST http://localhost:8001/api/materias/ \
   -H "Content-Type: application/json" \
   -d '{
     "nrc": "12345",
@@ -128,25 +115,25 @@ curl -X POST http://localhost:8002/api/materias/ \
 ### 6. Filtrar materias por periodo
 
 ```bash
-curl http://localhost:8002/api/materias/?periodo_id=1
+curl http://localhost:8001/api/materias/?periodo_id=1
 ```
 
 ### 7. Listar materias con nombre de periodo
 
 ```bash
-curl http://localhost:8002/api/materias/con-periodo/
+curl http://localhost:8001/api/materias/con-periodo/
 ```
 
 ### 8. Consultar una materia por ID
 
 ```bash
-curl http://localhost:8002/api/materias/1/
+curl http://localhost:8001/api/materias/1/
 ```
 
 ### 9. Actualizar una materia
 
 ```bash
-curl -X PUT http://localhost:8002/api/materias/1/ \
+curl -X PUT http://localhost:8001/api/materias/1/ \
   -H "Content-Type: application/json" \
   -d '{
     "nrc": "12345",
@@ -164,7 +151,7 @@ curl -X PUT http://localhost:8002/api/materias/1/ \
 ### 10. Eliminar una materia
 
 ```bash
-curl -X DELETE http://localhost:8002/api/materias/1/
+curl -X DELETE http://localhost:8001/api/materias/1/
 ```
 
 ## Pruebas automáticas
@@ -172,12 +159,10 @@ curl -X DELETE http://localhost:8002/api/materias/1/
 Si tienes Django instalado en tu entorno local, puedes correr:
 
 ```bash
-cd ms-periodos && python manage.py test
-cd ../ms-materias && python manage.py test
+cd ms-periodos-materias && python manage.py test
 ```
 
 ## Notas de arquitectura
 
-- `ms-periodos` y `ms-materias` son procesos distintos.
-- Cada servicio usa su propia base de datos.
-- La comunicación entre servicios queda preparada para integrar gRPC con los contratos en `proto/`.
+- `ms-periodos-materias` concentra periodos y materias en un único proceso.
+- El esquema de gRPC se mantiene versionado en `../proto/periodosmaterias.proto` para la evolución del proyecto.

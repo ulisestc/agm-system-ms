@@ -1,0 +1,336 @@
+import os
+import threading
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from sqlalchemy.orm import Session
+
+from database import engine, Base, get_db
+from auth import get_current_user, require_roles
+import models, schemas
+from generadores import (
+    generar_excel_calificaciones, generar_pdf_calificaciones,
+    generar_excel_asistencias,    generar_pdf_asistencias,
+)
+
+Base.metadata.create_all(bind=engine)
+
+
+def _start_grpc():
+    try:
+        import grpc_server
+        grpc_server.serve()
+    except Exception as e:
+        print(f"[WARNING] No se pudo iniciar el servidor gRPC: {e}")
+        print("          Ejecuta generate_grpc.py para generar los stubs.")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    grpc_thread = threading.Thread(target=_start_grpc, daemon=True)
+    grpc_thread.start()
+    yield
+
+
+app = FastAPI(
+    title="MS-7 Reportes & Estadísticas",
+    description="Microservicio de Reportes y Estadísticas para el sistema AGM — BUAP FCC",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+
+_cors_origins = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "http://localhost:4200").split(",")
+    if o.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+
+# ── Health check (público) ───────────────────────────────────────────────────
+
+@app.get("/", tags=["Health"])
+def read_root():
+    return {"mensaje": "¡El microservicio de Reportes está corriendo!", "servicio": "ms-reportes"}
+
+
+# ── Reportes – Calificaciones ─────────────────────────────────────────────────
+
+@app.get(
+    "/reportes/calificaciones/{materia_id}",
+    summary="Descargar reporte de calificaciones (datos demo)",
+    tags=["Reportes"],
+)
+def reporte_calificaciones(
+    materia_id: str,
+    formato: str = Query(default="pdf", enum=["pdf", "xls"]),
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente")),
+):
+    try:
+        if formato == "xls":
+            file_bytes, filename = generar_excel_calificaciones(materia_id)
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            file_bytes, filename = generar_pdf_calificaciones(materia_id)
+            media_type = "application/pdf"
+
+        db.add(models.ReporteGenerado(materia_id=materia_id, tipo="calificaciones", formato=formato))
+        db.commit()
+
+        return Response(
+            content=file_bytes,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar el reporte: {str(e)}")
+
+
+@app.post(
+    "/reportes/calificaciones/{materia_id}",
+    summary="Generar reporte de calificaciones con datos reales",
+    tags=["Reportes"],
+)
+def reporte_calificaciones_con_datos(
+    materia_id: str,
+    body: schemas.DatosCalificacionesReporte,
+    formato: str = Query(default="pdf", enum=["pdf", "xls"]),
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente")),
+):
+    try:
+        datos = body.model_dump()
+        datos["materia_id"] = materia_id
+        datos["alumnos"] = [a.model_dump() for a in body.alumnos]
+
+        if formato == "xls":
+            file_bytes, filename = generar_excel_calificaciones(materia_id, datos)
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            file_bytes, filename = generar_pdf_calificaciones(materia_id, datos)
+            media_type = "application/pdf"
+
+        db.add(models.ReporteGenerado(
+            materia_id=materia_id,
+            docente_id=body.docente_id,
+            tipo="calificaciones",
+            formato=formato,
+        ))
+        db.commit()
+
+        return Response(
+            content=file_bytes,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar el reporte: {str(e)}")
+
+
+# ── Reportes – Asistencias ────────────────────────────────────────────────────
+
+@app.get(
+    "/reportes/asistencias/{materia_id}",
+    summary="Descargar reporte de asistencias (datos demo)",
+    tags=["Reportes"],
+)
+def reporte_asistencias(
+    materia_id: str,
+    formato: str = Query(default="pdf", enum=["pdf", "xls"]),
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente")),
+):
+    try:
+        if formato == "xls":
+            file_bytes, filename = generar_excel_asistencias(materia_id)
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            file_bytes, filename = generar_pdf_asistencias(materia_id)
+            media_type = "application/pdf"
+
+        db.add(models.ReporteGenerado(materia_id=materia_id, tipo="asistencias", formato=formato))
+        db.commit()
+
+        return Response(
+            content=file_bytes,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar el reporte: {str(e)}")
+
+
+@app.post(
+    "/reportes/asistencias/{materia_id}",
+    summary="Generar reporte de asistencias con datos reales",
+    tags=["Reportes"],
+)
+def reporte_asistencias_con_datos(
+    materia_id: str,
+    body: schemas.DatosAsistenciasReporte,
+    formato: str = Query(default="pdf", enum=["pdf", "xls"]),
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente")),
+):
+    try:
+        datos = body.model_dump()
+        datos["materia_id"] = materia_id
+
+        if formato == "xls":
+            file_bytes, filename = generar_excel_asistencias(materia_id, datos)
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            file_bytes, filename = generar_pdf_asistencias(materia_id, datos)
+            media_type = "application/pdf"
+
+        db.add(models.ReporteGenerado(
+            materia_id=materia_id,
+            docente_id=body.docente_id,
+            tipo="asistencias",
+            formato=formato,
+        ))
+        db.commit()
+
+        return Response(
+            content=file_bytes,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar el reporte: {str(e)}")
+
+
+# ── Estadísticas – Docente ────────────────────────────────────────────────────
+
+@app.get(
+    "/estadisticas/docente/{docente_id}",
+    response_model=schemas.RespuestaPaginadaEstadisticasMateria,
+    summary="Historial paginado de estadísticas de un docente por periodo",
+    tags=["Estadísticas"],
+)
+def estadisticas_docente(
+    docente_id: str,
+    page:  int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente")),
+):
+    offset = (page - 1) * limit
+    query  = db.query(models.EstadisticaMateria).filter(
+        models.EstadisticaMateria.docente_id == docente_id
+    )
+    total    = query.count()
+    registros = query.order_by(models.EstadisticaMateria.fecha_registro.desc()).offset(offset).limit(limit).all()
+
+    return {
+        "success": True,
+        "message": f"{total} registro(s) encontrados para el docente {docente_id}",
+        "data": {"total": total, "page": page, "limit": limit, "items": registros},
+    }
+
+
+@app.post(
+    "/estadisticas/registrar",
+    response_model=schemas.RespuestaEstadistica,
+    status_code=201,
+    summary="Registrar estadísticas de una materia cerrada",
+    tags=["Estadísticas"],
+)
+def registrar_estadisticas(
+    estadistica: schemas.EstadisticaMateriaCreate,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin")),
+):
+    nuevo = models.EstadisticaMateria(**estadistica.model_dump())
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+    return {"success": True, "message": "Estadísticas registradas correctamente", "data": nuevo}
+
+
+# ── Estadísticas – Alumno ─────────────────────────────────────────────────────
+
+@app.get(
+    "/estadisticas/alumno/{alumno_id}",
+    response_model=schemas.RespuestaPaginadaEstadisticasAlumno,
+    summary="Estadísticas paginadas de un alumno por materia",
+    tags=["Estadísticas"],
+)
+def estadisticas_alumno(
+    alumno_id: str,
+    page:  int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin", "docente", "alumno")),
+):
+    offset = (page - 1) * limit
+    query  = db.query(models.EstadisticaAlumno).filter(
+        models.EstadisticaAlumno.alumno_id == alumno_id
+    )
+    total     = query.count()
+    registros = query.order_by(models.EstadisticaAlumno.fecha_registro.desc()).offset(offset).limit(limit).all()
+
+    return {
+        "success": True,
+        "message": f"{total} materia(s) encontradas para el alumno {alumno_id}",
+        "data": {"total": total, "page": page, "limit": limit, "items": registros},
+    }
+
+
+@app.post(
+    "/estadisticas/alumno/registrar",
+    response_model=schemas.RespuestaEstadisticaAlumno,
+    status_code=201,
+    summary="Registrar estadísticas de un alumno en una materia",
+    tags=["Estadísticas"],
+)
+def registrar_estadisticas_alumno(
+    estadistica: schemas.EstadisticaAlumnoCreate,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin")),
+):
+    nuevo = models.EstadisticaAlumno(**estadistica.model_dump())
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+    return {"success": True, "message": "Estadísticas del alumno registradas correctamente", "data": nuevo}
+
+
+# ── Historial de reportes generados ──────────────────────────────────────────
+
+@app.get(
+    "/reportes/historial",
+    summary="Historial paginado de todos los reportes generados",
+    tags=["Reportes"],
+)
+def historial_reportes(
+    page:  int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_roles("admin")),
+):
+    offset = (page - 1) * limit
+    total  = db.query(models.ReporteGenerado).count()
+    items  = db.query(models.ReporteGenerado).offset(offset).limit(limit).all()
+    return {
+        "success": True,
+        "message": f"Página {page} de reportes",
+        "data": {
+            "total": total,
+            "page":  page,
+            "limit": limit,
+            "items": [schemas.ReporteGeneradoResponse.model_validate(i) for i in items],
+        },
+    }

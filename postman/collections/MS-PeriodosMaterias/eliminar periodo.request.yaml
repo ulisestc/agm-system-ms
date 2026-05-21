@@ -1,0 +1,5 @@
+$kind: http-request
+name: Eliminar Periodo
+method: DELETE
+url: '{{base_url_periodos}}/api/periodos/1/'
+order: 1700

@@ -1,0 +1,13 @@
+$kind: grpc-request
+name: MS-Reportes: GenerateCalificacionesReport
+url: 'grpc://{{base_url_reportes_grpc}}'
+service: reportes.ReportesService
+method: GenerateCalificacionesReport
+order: 2400
+body:
+  type: json
+  content: |-
+    {
+      "materiaId": "{{materia_id}}",
+      "formato": "pdf"
+    }

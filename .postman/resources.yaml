@@ -1,0 +1,12 @@
+# Use this workspace to collaborate
+workspace:
+  id: ""
+
+localResources:
+  specs:
+    - ../proto/alumnosdocentes.proto
+    - ../proto/asistencias.proto
+    - ../proto/notificaciones.proto
+    - ../proto/periodosmaterias.proto
+    - ../proto/reportes.proto
+    - ../microservices/ms-asistencias/asistencias.proto
