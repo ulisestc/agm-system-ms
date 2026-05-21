@@ -14,6 +14,7 @@ from notification_client import send_reset_password_email
 from settings import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     ALGORITHM,
+    ENABLE_GRPC_SERVER,
     RESET_PASSWORD_EXPOSE_TOKEN,
     RESET_PASSWORD_TOKEN_EXPIRE_MINUTES,
     SECRET_KEY,
@@ -229,5 +230,8 @@ def _start_grpc():
 
 @app.on_event("startup")
 def startup_event():
+    if not ENABLE_GRPC_SERVER:
+        return
+
     grpc_thread = threading.Thread(target=_start_grpc, daemon=True)
     grpc_thread.start()

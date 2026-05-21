@@ -3,6 +3,12 @@ import os
 SECRET_KEY = os.getenv("SECRET_KEY", "clave_super_secreta_desarrollo_agm")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+ENABLE_GRPC_SERVER = os.getenv("ENABLE_GRPC_SERVER", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 RESET_PASSWORD_TOKEN_EXPIRE_MINUTES = int(
     os.getenv("RESET_PASSWORD_TOKEN_EXPIRE_MINUTES", "30")
