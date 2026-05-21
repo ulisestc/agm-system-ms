@@ -1,0 +1,9 @@
+FROM nginx:alpine
+
+# eliminar configuración por defecto
+RUN rm /etc/nginx/nginx.conf
+
+#conf personalizada
+COPY nginx.conf /etc/nginx/nginx.conf
+
+EXPOSE 80
