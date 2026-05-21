@@ -15,6 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar el código fuente del microservicio
 COPY microservices/ms-auth/ .
+COPY proto/auth.proto .
+COPY proto/notificaciones.proto .
+
+RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. auth.proto
+RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. notificaciones.proto
 
 # Puerto REST y, si se usa, puerto gRPC
 EXPOSE 8000 50051

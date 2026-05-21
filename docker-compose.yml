@@ -43,6 +43,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/agm_auth_db
       - GRPC_PORT=50051
+      - MS_NOTIFICACIONES_URL=ms-notificaciones:50056
+      - RESET_PASSWORD_EXPOSE_TOKEN=true
     depends_on:
       - postgres-db
 
