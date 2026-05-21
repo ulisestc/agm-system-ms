@@ -28,6 +28,24 @@ services:
     ports:
       - "6379:6379"
 
+  # MS-1 Autenticación y Autorización
+  ms-auth:
+    build:
+      context: .
+      dockerfile: microservices/ms-auth/Dockerfile
+    container_name: agm_ms_auth
+    restart: always
+    ports:
+      - "8000:8000"
+      - "50051:50051"
+    env_file:
+      - ./microservices/ms-auth/.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/agm_auth_db
+      - GRPC_PORT=50051
+    depends_on:
+      - postgres-db
+
   # MS-5 Asistencias QR
   ms-asistencias:
     build:
@@ -120,6 +138,20 @@ services:
       - GRPC_PORT=50057
     depends_on:
       - postgres-db
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: agm_api_gateway
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - ms-auth
+      - ms-periodos-materias
+      - ms-docentes
+      - ms-asistencias
 
 volumes:
   agm_db_data:
