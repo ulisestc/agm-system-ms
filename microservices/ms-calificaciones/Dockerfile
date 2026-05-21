@@ -1,8 +1,14 @@
-# Placeholder Dockerfile
-FROM node:20-alpine
+FROM python:3.11-slim
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
+
+RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+
+COPY microservices/ms-calificaciones/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY microservices/ms-calificaciones/src ./src
+
+EXPOSE 8004
 EXPOSE 50054
-CMD ["npm", "start"]
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8004"]
