@@ -15,3 +15,12 @@ class CalificacionBase(BaseModel):
 
 class CalificacionCreate(CalificacionBase):
     actividad_id: str
+
+
+class PonderacionItem(BaseModel):
+    nombre: str
+    ponderacion: float
+
+
+class PonderacionesCreate(BaseModel):
+    ponderaciones: list[PonderacionItem]
