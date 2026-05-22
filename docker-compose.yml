@@ -106,6 +106,21 @@ services:
     depends_on:
       - postgres-db
 
+  # MS-4 Calificaciones
+  ms-calificaciones:
+    build:
+      context: .
+      dockerfile: microservices/ms-calificaciones/Dockerfile
+    container_name: agm_ms_calificaciones
+    restart: always
+    ports:
+      - "8004:8004"
+      - "50054:50054"
+    env_file:
+      - ./microservices/ms-calificaciones/.env
+    depends_on:
+      - postgres-db
+
   ms-periodos-materias:
     build:
       context: ./microservices/ms-periodos-materias
