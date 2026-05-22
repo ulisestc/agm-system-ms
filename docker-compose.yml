@@ -188,8 +188,7 @@ services:
     container_name: agm_api_gateway
     restart: always
     ports:
-      - "8007:8007"
-      - "50057:50057"
+      - "80:80"
     depends_on:
       - ms-auth
       - ms-periodos-materias
