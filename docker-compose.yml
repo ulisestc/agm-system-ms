@@ -141,6 +141,7 @@ services:
       - "50052:50052"
     depends_on:
       - postgres-db
+ 
   # MS-7 Reportes
   ms-reportes:
     build:
@@ -154,8 +155,15 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/reports_db
       - GRPC_PORT=50057
+      - MS_PERIODOS_URL=ms-periodos-materias:50052
+      - MS_ALUMNOS_URL=ms-docentes:50053
+      - MS_ASISTENCIAS_URL=ms-asistencias:50055
+      - MS_CALIFICACIONES_URL=ms-calificaciones:50054
     depends_on:
       - postgres-db
+      - ms-periodos-materias
+      - ms-docentes
+      - ms-asistencias
 
   gateway:
     build:
@@ -164,7 +172,8 @@ services:
     container_name: agm_api_gateway
     restart: always
     ports:
-      - "80:80"
+      - "8007:8007"
+      - "50057:50057"
     depends_on:
       - ms-auth
       - ms-periodos-materias

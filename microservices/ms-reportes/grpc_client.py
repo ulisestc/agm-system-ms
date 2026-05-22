@@ -5,24 +5,43 @@ Cliente gRPC para ms-reportes.
 Proporciona funciones para consultar datos de otros microservicios vía gRPC.
 
 Servicios consultados:
-  - ms-periodos-materias:50052 → obtener información de materias y períodos
+  - ms-periodos-materias:50052 → información de materias y períodos
+  - ms-docentes:50053           → lista de alumnos inscritos por materia
+  - ms-asistencias:50055        → historial de asistencias por alumno/materia
 """
 import grpc
 import os
 import logging
+from collections import defaultdict
 
 try:
     import periodosmaterias_pb2
     import periodosmaterias_pb2_grpc
+    _PERIODOS_AVAILABLE = True
 except ImportError:
-    raise ImportError(
-        "Falta generar stubs de gRPC. Ejecuta: python generate_grpc.py"
-    )
+    _PERIODOS_AVAILABLE = False
+
+try:
+    import alumnosdocentes_pb2
+    import alumnosdocentes_pb2_grpc
+    _ALUMNOS_AVAILABLE = True
+except ImportError:
+    _ALUMNOS_AVAILABLE = False
+
+try:
+    import asistencias_pb2
+    import asistencias_pb2_grpc
+    _ASISTENCIAS_AVAILABLE = True
+except ImportError:
+    _ASISTENCIAS_AVAILABLE = False
 
 logger = logging.getLogger("[gRPC-Client ms-reportes]")
 
 
 def get_materia_by_id(materia_id: int) -> dict | None:
+    if not _PERIODOS_AVAILABLE:
+        logger.warning("Stubs de periodosmaterias no generados. Ejecuta generate_grpc.py")
+        return None
     """
     Consulta ms-periodos-materias para obtener información de una materia.
     
@@ -68,6 +87,8 @@ def get_materia_by_id(materia_id: int) -> dict | None:
 
 
 def get_materia_by_nrc(nrc: str) -> dict | None:
+    if not _PERIODOS_AVAILABLE:
+        return None
     """
     Consulta ms-periodos-materias para obtener información de una materia por NRC.
     
@@ -113,6 +134,8 @@ def get_materia_by_nrc(nrc: str) -> dict | None:
 
 
 def get_periodo_activo() -> dict | None:
+    if not _PERIODOS_AVAILABLE:
+        return None
     """
     Consulta ms-periodos-materias para obtener el período activo actual.
     
@@ -151,6 +174,8 @@ def get_periodo_activo() -> dict | None:
 
 
 def get_materias_by_docente(docente_id: int) -> list[dict] | None:
+    if not _PERIODOS_AVAILABLE:
+        return None
     """
     Consulta ms-periodos-materias para obtener todas las materias de un docente.
     

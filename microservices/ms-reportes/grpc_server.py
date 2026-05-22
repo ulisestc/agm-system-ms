@@ -79,16 +79,25 @@ class ReportesServicer(reportes_pb2_grpc.ReportesServiceServicer):
                     error_message=f"Materia {request.materiaId} no encontrada",
                 )
             
-            # Usar datos pasados o combinar con datos de materia
+            # Usar datos pasados o construir desde otros microservicios
             datos = _parse_datos(request.datos_json)
             if not datos:
-                # Generar datos demo pero con info real de la materia
+                alumnos = grpc_client.get_alumnos_by_materia(request.materiaId) or []
                 datos = {
                     "materia_nombre": materia_info["nombre"],
-                    "materia_nrc": materia_info["nrc"],
-                    "periodo": "Período Activo",
-                    "docente": materia_info["docente_nombre"],
-                    "alumnos": [],  # Se pueden llenar desde otros servicios en futuro
+                    "materia_nrc":    materia_info["nrc"],
+                    "periodo":        "Período Activo",
+                    "docente":        materia_info["docente_nombre"],
+                    "alumnos": [
+                        {
+                            "matricula":        a["id"],
+                            "nombre":           a["nombre"],
+                            "promedio_real":    0,
+                            "calificacion_final": 0,
+                        }
+                        for a in alumnos
+                    ],
+
                 }
             else:
                 # Asegurar que tiene datos de materia

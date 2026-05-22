@@ -21,6 +21,8 @@ OUTPUT_DIR = "."                                 # stubs en el mismo directorio 
 PROTO_FILES = [
     "reportes.proto",
     "periodosmaterias.proto",
+    "alumnosdocentes.proto",
+    "asistencias.proto",
 ]
 
 for proto_file in PROTO_FILES:

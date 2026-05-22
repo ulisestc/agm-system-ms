@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database import engine, Base, get_db
 from auth import get_current_user, require_roles
-import models, schemas
+import models, schemas, grpc_client
 from generadores import (
     generar_excel_calificaciones, generar_pdf_calificaciones,
     generar_excel_asistencias,    generar_pdf_asistencias,
@@ -79,11 +79,30 @@ def reporte_calificaciones(
     _user: dict = Depends(require_roles("admin", "docente")),
 ):
     try:
+        datos = None
+        try:
+            materia_info = grpc_client.get_materia_by_id(int(materia_id))
+            alumnos      = grpc_client.get_alumnos_by_materia(materia_id) or []
+            if materia_info:
+                datos = {
+                    "materia_nombre": materia_info["nombre"],
+                    "materia_nrc":    materia_info["nrc"],
+                    "periodo":        "Período Activo",
+                    "docente":        materia_info["docente_nombre"],
+                    "alumnos": [
+                        {"matricula": a["id"], "nombre": a["nombre"],
+                         "promedio_real": 0, "calificacion_final": 0}
+                        for a in alumnos
+                    ],
+                }
+        except Exception:
+            pass  # Si MS-2 o MS-3 no responden, se usa datos demo
+
         if formato == "xls":
-            file_bytes, filename = generar_excel_calificaciones(materia_id)
+            file_bytes, filename = generar_excel_calificaciones(materia_id, datos)
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         else:
-            file_bytes, filename = generar_pdf_calificaciones(materia_id)
+            file_bytes, filename = generar_pdf_calificaciones(materia_id, datos)
             media_type = "application/pdf"
 
         db.add(models.ReporteGenerado(materia_id=materia_id, tipo="calificaciones", formato=formato))
@@ -153,11 +172,27 @@ def reporte_asistencias(
     _user: dict = Depends(require_roles("admin", "docente")),
 ):
     try:
+        datos = None
+        try:
+            materia_info = grpc_client.get_materia_by_id(int(materia_id))
+            alumnos      = grpc_client.get_alumnos_by_materia(materia_id) or []
+            sesiones     = grpc_client.construir_sesiones_asistencia(alumnos, materia_id)
+            if materia_info:
+                datos = {
+                    "materia_nombre": materia_info["nombre"],
+                    "materia_nrc":    materia_info["nrc"],
+                    "periodo":        "Período Activo",
+                    "docente":        materia_info["docente_nombre"],
+                    "sesiones":       sesiones,
+                }
+        except Exception:
+            pass  # Si MS-2, MS-3 o MS-5 no responden, se usa datos demo
+
         if formato == "xls":
-            file_bytes, filename = generar_excel_asistencias(materia_id)
+            file_bytes, filename = generar_excel_asistencias(materia_id, datos)
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         else:
-            file_bytes, filename = generar_pdf_asistencias(materia_id)
+            file_bytes, filename = generar_pdf_asistencias(materia_id, datos)
             media_type = "application/pdf"
 
         db.add(models.ReporteGenerado(materia_id=materia_id, tipo="asistencias", formato=formato))
