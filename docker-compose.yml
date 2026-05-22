@@ -152,11 +152,13 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=root
       - GRPC_PORT=50052
+      - MS_NOTIFICACIONES_URL=ms-notificaciones:50056
     ports:
       - "8001:8000"
       - "50052:50052"
     depends_on:
       - postgres-db
+      - ms-notificaciones
  
   # MS-7 Reportes
   ms-reportes:
