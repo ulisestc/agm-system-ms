@@ -19,6 +19,7 @@ from settings import (
     RESET_PASSWORD_TOKEN_EXPIRE_MINUTES,
     SECRET_KEY,
 )
+from fastapi.middleware.cors import CORSMiddleware
 import models
 import schemas
 
@@ -33,6 +34,14 @@ app = FastAPI(
     title="MS-1 Auth & Users",
     description="Microservicio de Autenticacion para el sistema AGM",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
