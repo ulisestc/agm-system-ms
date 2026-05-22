@@ -57,6 +57,7 @@ services:
       - ENABLE_GRPC_SERVER=true
       - MS_NOTIFICACIONES_URL=ms-notificaciones:50056
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - RESET_PASSWORD_TOKEN_EXPIRE_MINUTES=30
       - RESET_PASSWORD_EXPOSE_TOKEN=true
     depends_on:
       - postgres-db
