@@ -95,7 +95,7 @@ services:
       environment:
         - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/agm_notificaciones_db
         - SMTP_HOST=smtp4dev
-        - MS_MATERIAS_URL=ms-materias:50052
+        - MS_MATERIAS_URL=ms-periodos-materias:50052
         - MS_ALUMNOS_URL=ms-docentes:50053
         - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       ports:
