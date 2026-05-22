@@ -2,6 +2,9 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+import grpc
+
+from .grpc_notifications import send_cierre_materia
 from .models import Periodo, Materia
 from .pagination import APIPageNumberPagination
 from .serializers import PeriodoSerializer, MateriaSerializer
@@ -132,6 +135,25 @@ class MateriaViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         instance.delete()
         return self._success(None, "Materia eliminada correctamente.")
+
+    @action(detail=True, methods=["post"], url_path="cerrar")
+    def cerrar(self, request, pk=None):
+        materia = self.get_object()
+        materia.activo = False
+        materia.save()
+
+        try:
+            notified = send_cierre_materia(materia.id)
+        except grpc.RpcError as exc:
+            return self._error(f"No se pudo notificar el cierre de la materia: {exc.details()}", status.HTTP_502_BAD_GATEWAY)
+
+        if not notified:
+            return self._error("El servicio de notificaciones rechazó el cierre de la materia.", status.HTTP_502_BAD_GATEWAY)
+
+        return self._success(
+            self.get_serializer(materia).data,
+            "Materia cerrada y notificación enviada correctamente.",
+        )
 
     @action(detail=False, methods=["get"], url_path="por-periodo/(?P<periodo_id>[^/.]+)")
     def por_periodo(self, request, periodo_id=None):

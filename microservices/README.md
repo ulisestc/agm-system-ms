@@ -124,13 +124,21 @@ curl http://localhost:8001/api/materias/?periodo_id=1
 curl http://localhost:8001/api/materias/con-periodo/
 ```
 
-### 8. Consultar una materia por ID
+### 8. Cerrar una materia y notificar por gRPC
+
+```bash
+curl -X POST http://localhost:8001/api/materias/1/cerrar/
+```
+
+Este endpoint marca la materia como inactiva y llama al servicio de notificaciones por gRPC usando `MS_NOTIFICACIONES_URL`.
+
+### 9. Consultar una materia por ID
 
 ```bash
 curl http://localhost:8001/api/materias/1/
 ```
 
-### 9. Actualizar una materia
+### 10. Actualizar una materia
 
 ```bash
 curl -X PUT http://localhost:8001/api/materias/1/ \
@@ -148,7 +156,7 @@ curl -X PUT http://localhost:8001/api/materias/1/ \
   }'
 ```
 
-### 10. Eliminar una materia
+### 11. Eliminar una materia
 
 ```bash
 curl -X DELETE http://localhost:8001/api/materias/1/

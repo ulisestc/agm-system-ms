@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError
+from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -103,3 +104,24 @@ class MateriaAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"][0]["periodo_nombre"], "2026 Primavera")
         self.assertEqual(response.data["data"][0]["nrc"], "54321")
+
+    @patch("academic.views.send_cierre_materia", return_value=True)
+    def test_close_materia_triggers_notificacion_grpc(self, mocked_send):
+        materia = Materia.objects.create(
+            nrc="67890",
+            nombre="Redes",
+            seccion="001",
+            clave="RED-301",
+            docente_id=12,
+            docente_nombre="Ing. Pérez",
+            horario="Miércoles 10:00-12:00",
+            periodo_id=self.periodo.id,
+            activo=True,
+        )
+
+        response = self.client.post(f"/api/materias/{materia.id}/cerrar/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertFalse(Materia.objects.get(id=materia.id).activo)
+        mocked_send.assert_called_once_with(materia.id)
