@@ -15,6 +15,8 @@ def test_ms_asistencias_full_flow():
     docente_id = "DOC-123"
     alumno_id = "1" # ID numérico del alumno que creamos manualmente (en lugar de matrícula)
     
+    success = True
+
     # 1. Iniciar Sesión
     print(f"[1] Iniciando sesión para materia {materia_id}...", end=" ")
     # Nos aseguramos que no haya una sesión previa abierta (limpieza)
@@ -30,7 +32,7 @@ def test_ms_asistencias_full_flow():
     else:
         print(f"FAILED ({res.status_code})")
         print(res.text)
-        return
+        sys.exit(1)
 
     # 2. Intentar iniciar sesión duplicada (debe fallar)
     print("[2] Probando validación de sesión duplicada...", end=" ")
@@ -39,6 +41,7 @@ def test_ms_asistencias_full_flow():
         print("OK (Bloqueado correctamente)")
     else:
         print(f"FAILED (Se permitió duplicar sesión: {res.status_code})")
+        success = False
 
     # 3. Registrar asistencia (Happy Path)
     print(f"[3] Registrando asistencia para alumno {alumno_id}...", end=" ")
@@ -54,6 +57,7 @@ def test_ms_asistencias_full_flow():
     else:
         print(f"FAILED ({res.status_code})")
         print(res.text)
+        success = False
 
     # 4. Anti-replay (usar el mismo token de nuevo)
     print("[4] Probando Anti-replay con el mismo token...", end=" ")
@@ -62,6 +66,7 @@ def test_ms_asistencias_full_flow():
         print("OK (Bloqueado correctamente)")
     else:
         print(f"FAILED (Se permitió re-uso de token: {res.status_code})")
+        success = False
 
     # 5. Consultar asistencias de hoy
     print("[5] Consultando asistencias de hoy...", end=" ")
@@ -71,6 +76,7 @@ def test_ms_asistencias_full_flow():
         print(f"OK (Registros encontrados: {len(registros)})")
     else:
         print(f"FAILED ({res.status_code})")
+        success = False
 
     # 6. Cerrar sesión
     print("[6] Cerrando sesión forzosamente...", end=" ")
@@ -79,6 +85,7 @@ def test_ms_asistencias_full_flow():
         print("OK")
     else:
         print(f"FAILED ({res.status_code})")
+        success = False
 
     # 7. Registrar tras cierre (debe fallar)
     print("[7] Probando registro tras cierre de sesión...", end=" ")
@@ -89,10 +96,14 @@ def test_ms_asistencias_full_flow():
         print("OK (Bloqueado correctamente)")
     else:
         print(f"FAILED (Se permitió registro tras cierre: {res.status_code})")
+        success = False
 
     print("\n====================================================")
     print("   PRUEBAS DE MS-ASISTENCIAS FINALIZADAS            ")
     print("====================================================")
+    
+    if not success:
+        sys.exit(1)
 
 if __name__ == "__main__":
     test_ms_asistencias_full_flow()

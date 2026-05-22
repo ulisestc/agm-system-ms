@@ -46,9 +46,10 @@ def test_gateway():
     if not all(results.values()):
         print("\n⚠️ Se detectaron fallos en el ruteo del Gateway.")
         print("Causa probable: Puertos incorrectos en gateway/nginx.conf")
-        # No salimos con error para permitir que el usuario vea el reporte completo
+        sys.exit(1)
     else:
         print("\n✅ El Gateway está ruteando correctamente a todos los servicios.")
+        sys.exit(0)
 
 if __name__ == "__main__":
     test_gateway()
