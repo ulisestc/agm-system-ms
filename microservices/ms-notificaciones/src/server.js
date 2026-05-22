@@ -2,6 +2,7 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 const nodemailer = require('nodemailer');
+const amqp = require('amqplib');
 const db = require('./db'); // para logs
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') }); // variables de entorno
@@ -289,7 +290,69 @@ function main() {
             return;
         }
         console.log(`Microservicio de Notificaciones escuchando gRPC en ${host}`);
+        startRabbitMQ();
     });
+}
+
+async function startRabbitMQ() {
+    const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
+    try {
+        const connection = await amqp.connect(rabbitUrl);
+        const channel = await connection.createChannel();
+        const queue = 'notifications_queue';
+
+        await channel.assertQueue(queue, { durable: true });
+        console.log(`[RabbitMQ] Escuchando cola: ${queue}`);
+
+        channel.consume(queue, (msg) => {
+            if (msg !== null) {
+                try {
+                    const content = JSON.parse(msg.content.toString());
+                    const { type, data } = content;
+                    console.log(`[RabbitMQ] Recibido tipo: ${type}`);
+
+                    const fakeCall = { request: data };
+                    const fakeCallback = (err, response) => {
+                        if (err || (response && !response.success)) {
+                            console.error(`[RabbitMQ] Error en ${type}:`, err || response.error_message);
+                        } else {
+                            console.log(`[RabbitMQ] Éxito en ${type}`);
+                        }
+                    };
+
+                    switch (type) {
+                        case 'bienvenida':
+                            sendBienvenida(fakeCall, fakeCallback);
+                            break;
+                        case 'baja':
+                            sendBajaNotif(fakeCall, fakeCallback);
+                            break;
+                        case 'cierre_materia':
+                            sendCierreMateria(fakeCall, fakeCallback);
+                            break;
+                        case 'reset_password':
+                            sendResetPassword(fakeCall, fakeCallback);
+                            break;
+                        default:
+                            console.warn(`[RabbitMQ] Tipo desconocido: ${type}`);
+                    }
+                    channel.ack(msg);
+                } catch (parseError) {
+                    console.error("[RabbitMQ] Error parseando mensaje:", parseError);
+                    channel.nack(msg, false, false); // No reencolar si el JSON está mal
+                }
+            }
+        });
+
+        connection.on('error', (err) => {
+            console.error("[RabbitMQ] Error de conexión:", err);
+            setTimeout(startRabbitMQ, 5000);
+        });
+
+    } catch (error) {
+        console.error("[RabbitMQ] Fallo al conectar:", error.message);
+        setTimeout(startRabbitMQ, 5000);
+    }
 }
 
 main();

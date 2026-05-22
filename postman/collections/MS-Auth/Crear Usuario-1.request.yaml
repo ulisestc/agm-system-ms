@@ -1,11 +1,9 @@
 $kind: http-request
 name: Crear Usuario
+url: "{{base_url_auth}}/usuarios/"
 method: POST
-url: '{{base_url_auth}}/usuarios/'
-order: 1000
 headers:
-  - key: Content-Type
-    value: application/json
+  Content-Type: application/json
 body:
   type: json
   content: |-
@@ -14,3 +12,4 @@ body:
       "password": "password123",
       "rol": "ALUMNO"
     }
+order: 2549

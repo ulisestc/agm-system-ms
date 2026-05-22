@@ -18,6 +18,7 @@ RESET_PASSWORD_EXPOSE_TOKEN = os.getenv(
 ).lower() in {"1", "true", "yes", "on"}
 
 MS_NOTIFICACIONES_URL = os.getenv("MS_NOTIFICACIONES_URL", "")
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672")
 NOTIFICACIONES_TIMEOUT_SECONDS = float(
     os.getenv("NOTIFICACIONES_TIMEOUT_SECONDS", "3")
 )

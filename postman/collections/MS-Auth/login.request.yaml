@@ -1,0 +1,17 @@
+$kind: http-request
+name: Login
+method: POST
+url: '{{base_url_auth}}/auth/login'
+order: 3500
+headers:
+  - key: Content-Type
+    value: application/x-www-form-urlencoded
+body:
+  type: urlencoded
+  content:
+    - key: username
+      value: alumno@buap.mx
+    - key: password
+      value: password123
+    - key: grant_type
+      value: password

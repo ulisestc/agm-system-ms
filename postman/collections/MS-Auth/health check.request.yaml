@@ -2,4 +2,4 @@ $kind: http-request
 name: Health Check
 method: GET
 url: '{{base_url_auth}}/'
-order: 1000
+order: 3000

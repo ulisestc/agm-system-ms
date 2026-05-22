@@ -1,0 +1,8 @@
+$kind: http-request
+name: Get Current User (Me)
+method: GET
+url: '{{base_url_auth}}/auth/me'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

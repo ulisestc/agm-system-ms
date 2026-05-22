@@ -28,6 +28,17 @@ services:
     ports:
       - "6379:6379"
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: agm_rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+
   # MS-1 Autenticación y Autorización
   ms-auth:
     build:
@@ -45,9 +56,11 @@ services:
       - GRPC_PORT=50051
       - ENABLE_GRPC_SERVER=true
       - MS_NOTIFICACIONES_URL=ms-notificaciones:50056
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       - RESET_PASSWORD_EXPOSE_TOKEN=true
     depends_on:
       - postgres-db
+      - rabbitmq
 
   # MS-5 Asistencias QR
   ms-asistencias:
@@ -83,11 +96,13 @@ services:
         - SMTP_HOST=smtp4dev
         - MS_MATERIAS_URL=ms-materias:50052
         - MS_ALUMNOS_URL=ms-docentes:50053
+        - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       ports:
         - "50056:50056"
       depends_on:
         - postgres-db
         - smtp4dev
+        - rabbitmq
 
   # MS-3 Docentes & Alumnos
   ms-docentes:
