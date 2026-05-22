@@ -173,6 +173,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/reports_db
       - GRPC_PORT=50057
+      - JWT_SECRET=clave_super_secreta_desarrollo_agm
       - MS_PERIODOS_URL=ms-periodos-materias:50052
       - MS_ALUMNOS_URL=ms-docentes:50053
       - MS_ASISTENCIAS_URL=ms-asistencias:50055

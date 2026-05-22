@@ -76,7 +76,7 @@ def reporte_calificaciones(
     materia_id: str,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente")),
+    _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     try:
         datos = None
@@ -127,7 +127,7 @@ def reporte_calificaciones_con_datos(
     body: schemas.DatosCalificacionesReporte,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente")),
+    _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     try:
         datos = body.model_dump()
@@ -169,7 +169,7 @@ def reporte_asistencias(
     materia_id: str,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente")),
+    _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     try:
         datos = None
@@ -217,7 +217,7 @@ def reporte_asistencias_con_datos(
     body: schemas.DatosAsistenciasReporte,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente")),
+    _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     try:
         datos = body.model_dump()
@@ -260,7 +260,7 @@ def estadisticas_docente(
     page:  int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente")),
+    _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     offset = (page - 1) * limit
     query  = db.query(models.EstadisticaMateria).filter(
@@ -286,7 +286,7 @@ def estadisticas_docente(
 def registrar_estadisticas(
     estadistica: schemas.EstadisticaMateriaCreate,
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin")),
+    _user: dict = Depends(require_roles("Administrador")),
 ):
     nuevo = models.EstadisticaMateria(**estadistica.model_dump())
     db.add(nuevo)
@@ -308,7 +308,7 @@ def estadisticas_alumno(
     page:  int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente", "alumno")),
+    _user: dict = Depends(require_roles("Administrador", "Docente", "Alumno")),
 ):
     offset = (page - 1) * limit
     query  = db.query(models.EstadisticaAlumno).filter(
@@ -334,7 +334,7 @@ def estadisticas_alumno(
 def registrar_estadisticas_alumno(
     estadistica: schemas.EstadisticaAlumnoCreate,
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin")),
+    _user: dict = Depends(require_roles("Administrador")),
 ):
     nuevo = models.EstadisticaAlumno(**estadistica.model_dump())
     db.add(nuevo)
@@ -354,7 +354,7 @@ def historial_reportes(
     page:  int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin")),
+    _user: dict = Depends(require_roles("Administrador")),
 ):
     offset = (page - 1) * limit
     total  = db.query(models.ReporteGenerado).count()
