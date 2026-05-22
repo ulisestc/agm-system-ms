@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package calificaciones;
+
+service CalificacionesService {
+  rpc GetPromedioAlumno (PromedioRequest) returns (PromedioResponse) {}
+  rpc GetConcentradoMateria (MateriaRequest) returns (ConcentradoResponse) {}
+  rpc GetEstadisticasMateria (MateriaRequest) returns (EstadisticasResponse) {}
+}
+
+message PromedioRequest {
+  string materia_id = 1;
+  string alumno_id = 2;
+}
+
+message PromedioResponse {
+  float promedio_final = 1;
+  string mensaje = 2;
+  bool success = 3;
+}
+
+message MateriaRequest {
+  string materia_id = 1;
+}
+
+message ConcentradoResponse {
+  repeated CalificacionItem calificaciones = 1;
+}
+
+message CalificacionItem {
+  string alumno_id = 1;
+  float nota = 2;
+  string actividad_nombre = 3;
+}
+
+message EstadisticasResponse {
+  float promedio_general = 1;
+  int32 total_alumnos_evaluados = 2;
+  float calificacion_maxima = 3;
+  float calificacion_minima = 4;
+}

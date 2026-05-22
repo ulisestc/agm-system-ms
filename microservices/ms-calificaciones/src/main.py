@@ -1,11 +1,20 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+import threading
+import grpc
+from concurrent import futures
 import pandas as pd
 import io
 
+import sys
+import os
+
 from src.database import engine, Base, get_db
 from src import models, schemas
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "grpc_generated"))
+from src.grpc_generated import calificaciones_pb2, calificaciones_pb2_grpc
 
 Base.metadata.create_all(bind=engine)
 
@@ -35,6 +44,13 @@ def health_check():
 def crear_actividad(actividad: schemas.ActividadCreate, db: Session = Depends(get_db)):
     if actividad.ponderacion <= 0 or actividad.ponderacion > 100:
         raise HTTPException(status_code=400, detail="La ponderación debe estar entre 1 y 100.")
+
+    actividades_existentes = db.query(models.Actividad).filter(models.Actividad.materia_id == actividad.materia_id).all()
+    suma_actual = sum(act.ponderacion for act in actividades_existentes)
+    if suma_actual + actividad.ponderacion > 100:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La suma no puede exceder 100%. Llevas {suma_actual}%, puedes agregar un máximo de {100 - suma_actual}%.")
 
     nueva_actividad = models.Actividad(
         materia_id=actividad.materia_id,
@@ -66,9 +82,33 @@ def listar_actividades(materia_id: str, db: Session = Depends(get_db)):
         "message": "Actividades obtenidas correctamente."
     }
 
-@app.post("/actividades/{actividad_id}/calificaciones/excel", summary="Cargar calificaciones desde un archivo Excel")
+@app.post("/calificaciones", summary="Registrar calificación individual")
+def registrar_calificacion(calif: schemas.CalificacionCreate, db: Session = Depends(get_db)):
+    actividad = db.query(models.Actividad).filter(models.Actividad.id == calif.actividad_id).first()
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada.")
+
+    calificacion_existente = db.query(models.Calificacion).filter_by(
+        actividad_id=calif.actividad_id, alumno_id=calif.alumno_id
+    ).first()
+
+    if calificacion_existente:
+        calificacion_existente.valor = calif.valor
+    else:
+        nueva_calif = models.Calificacion(
+            actividad_id=calif.actividad_id,
+            alumno_id=calif.alumno_id,
+            valor=calif.valor
+        )
+        db.add(nueva_calif)
+
+    db.commit()
+    return {"success": True, "message": "Calificación registrada individualmente."}
+
+
+@app.post("/calificaciones/importar", summary="Cargar calificaciones desde un archivo Excel")
 async def cargar_calificaciones_excel(
-    actividad_id: str, 
+    actividad_id: str = Form(...),
     file: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
@@ -161,3 +201,212 @@ def calcular_promedio_final(materia_id: str, alumno_id: str, db: Session = Depen
         },
         "message": "Promedio calculado correctamente."
     }
+
+@app.get("/ponderaciones/{materia_id}", summary="Obtener ponderaciones de una materia")
+def obtener_ponderaciones(materia_id: str, db: Session = Depends(get_db)):
+    actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == materia_id).all()
+    total = sum(act.ponderacion for act in actividades)
+    return {"success": True, "data": {"materia_id": materia_id, "total_ponderacion": total, "detalles": actividades}}
+
+
+@app.post("/ponderaciones/{materia_id}", summary="Configurar ponderaciones de una materia")
+def crear_ponderaciones(materia_id: str, payload: schemas.PonderacionesCreate, db: Session = Depends(get_db)):
+    if not payload.ponderaciones:
+        raise HTTPException(status_code=400, detail="Debe enviar al menos una ponderación.")
+
+    total_nuevo = sum(item.ponderacion for item in payload.ponderaciones)
+    if total_nuevo <= 0 or total_nuevo > 100:
+        raise HTTPException(status_code=400, detail="La suma de las ponderaciones debe estar entre 1 y 100.")
+
+    actividades_existentes = db.query(models.Actividad).filter(models.Actividad.materia_id == materia_id).all()
+    suma_existente = sum(act.ponderacion for act in actividades_existentes)
+
+    if actividades_existentes and suma_existente != 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La materia ya tiene ponderaciones registradas con un total de {suma_existente}%. Use PUT para actualizar o elimine las anteriores antes de volver a configurar."
+        )
+
+    if round(total_nuevo, 2) != 100.00:
+        raise HTTPException(status_code=400, detail=f"La suma de las ponderaciones debe ser exactamente 100%. Actualmente suma {total_nuevo}%.")
+
+    creadas = []
+    for item in payload.ponderaciones:
+        if item.ponderacion <= 0 or item.ponderacion > 100:
+            raise HTTPException(status_code=400, detail="Cada ponderación debe estar entre 1 y 100.")
+
+        nueva_actividad = models.Actividad(
+            materia_id=materia_id,
+            nombre=item.nombre,
+            ponderacion=item.ponderacion,
+        )
+        db.add(nueva_actividad)
+        creadas.append(nueva_actividad)
+
+    db.commit()
+
+    for actividad in creadas:
+        db.refresh(actividad)
+
+    return {
+        "success": True,
+        "data": {
+            "materia_id": materia_id,
+            "total_ponderacion": 100.0,
+            "ponderaciones_creadas": [
+                {"actividad_id": actividad.id, "nombre": actividad.nombre, "ponderacion": actividad.ponderacion}
+                for actividad in creadas
+            ],
+        },
+        "message": "Ponderaciones configuradas correctamente."
+    }
+
+@app.put("/ponderaciones/{actividad_id}", summary="Actualizar ponderación de una actividad")
+def actualizar_ponderacion(actividad_id: str, nueva_ponderacion: float, db: Session = Depends(get_db)):
+    if nueva_ponderacion <= 0 or nueva_ponderacion > 100:
+        raise HTTPException(status_code=400, detail="Ponderación inválida.")
+        
+    actividad = db.query(models.Actividad).filter(models.Actividad.id == actividad_id).first()
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada.")
+
+    otras_actividades = db.query(models.Actividad).filter(
+        models.Actividad.materia_id == actividad.materia_id,
+        models.Actividad.id != actividad_id
+    ).all()
+    suma_otras = sum(act.ponderacion for act in otras_actividades)
+
+    if suma_otras + nueva_ponderacion > 100:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Excede el 100%. Las demás actividades suman {suma_otras}%. El máximo para esta es {100 - suma_otras}%."
+        )
+        
+    actividad.ponderacion = nueva_ponderacion
+    db.commit()
+    return {"success": True, "message": "Ponderación actualizada."}
+
+@app.get("/concentrado/{materia_id}", summary="Obtener el concentrado final de calificaciones")
+def obtener_concentrado(materia_id: str, db: Session = Depends(get_db)):
+    actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == materia_id).all()
+    if not actividades:
+        raise HTTPException(status_code=404, detail="Sin actividades en esta materia.")
+    
+    concentrado_alumnos = {}
+    
+    for act in actividades:
+        calificaciones = db.query(models.Calificacion).filter_by(actividad_id=str(act.id)).all()
+        for calif in calificaciones:
+            matricula = calif.alumno_id
+            puntos = calif.valor * (act.ponderacion / 100)
+            
+            if matricula not in concentrado_alumnos:
+                concentrado_alumnos[matricula] = 0.0
+            concentrado_alumnos[matricula] += puntos
+            
+    resultado = []
+    for matricula, promedio in concentrado_alumnos.items():
+        redondeado = int(promedio) + 1 if (promedio - int(promedio)) >= 0.5 else int(promedio)
+        resultado.append({
+            "alumno_id": matricula,
+            "promedio_exacto": round(promedio, 2),
+            "promedio_redondeado": redondeado
+        })
+        
+    return {"success": True, "data": resultado, "message": "Concentrado generado exitosamente."}
+
+
+class CalificacionesServicer(calificaciones_pb2_grpc.CalificacionesServiceServicer):
+    def GetPromedioAlumno(self, request, context):
+        db = next(get_db())
+        try:
+            actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == request.materia_id).all()
+            promedio_ponderado = 0.0
+
+            for act in actividades:
+                calif = db.query(models.Calificacion).filter_by(
+                    actividad_id=str(act.id), alumno_id=request.alumno_id
+                ).first()
+
+                if calif:
+                    promedio_ponderado += calif.valor * (act.ponderacion / 100)
+
+            return calificaciones_pb2.PromedioResponse(
+                promedio_final=round(promedio_ponderado, 2),
+                mensaje="Promedio consultado exitosamente",
+                success=True
+            )
+        finally:
+            db.close()
+
+    def GetConcentradoMateria(self, request, context):
+        db = next(get_db())
+        try:
+            actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == request.materia_id).all()
+            items = []
+            for act in actividades:
+                calificaciones = db.query(models.Calificacion).filter_by(actividad_id=str(act.id)).all()
+                for c in calificaciones:
+                    items.append(calificaciones_pb2.CalificacionItem(
+                        alumno_id=c.alumno_id,
+                        nota=c.valor,
+                        actividad_nombre=act.nombre
+                    ))
+            return calificaciones_pb2.ConcentradoResponse(calificaciones=items)
+        finally:
+            db.close()
+
+    def GetEstadisticasMateria(self, request, context):
+        db = next(get_db())
+        try:
+            actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == request.materia_id).all()
+            if not actividades:
+                return calificaciones_pb2.EstadisticasResponse(
+                    promedio_general=0.0,
+                    total_alumnos_evaluados=0,
+                    calificacion_maxima=0.0,
+                    calificacion_minima=0.0
+                )
+
+            concentrado_alumnos = {}
+
+            for act in actividades:
+                calificaciones = db.query(models.Calificacion).filter_by(actividad_id=str(act.id)).all()
+                for calif in calificaciones:
+                    matricula = calif.alumno_id
+                    puntos = calif.valor * (act.ponderacion / 100)
+                    if matricula not in concentrado_alumnos:
+                        concentrado_alumnos[matricula] = 0.0
+                    concentrado_alumnos[matricula] += puntos
+
+            if not concentrado_alumnos:
+                return calificaciones_pb2.EstadisticasResponse(
+                    promedio_general=0.0,
+                    total_alumnos_evaluados=0,
+                    calificacion_maxima=0.0,
+                    calificacion_minima=0.0
+                )
+
+            promedios = list(concentrado_alumnos.values())
+
+            return calificaciones_pb2.EstadisticasResponse(
+                promedio_general=round(sum(promedios) / len(promedios), 2),
+                total_alumnos_evaluados=len(promedios),
+                calificacion_maxima=round(max(promedios), 2),
+                calificacion_minima=round(min(promedios), 2)
+            )
+        finally:
+            db.close()
+
+
+def serve_grpc():
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    calificaciones_pb2_grpc.add_CalificacionesServiceServicer_to_server(
+        CalificacionesServicer(), server
+    )
+    server.add_insecure_port('[::]:50055')
+    server.start()
+    server.wait_for_termination()
+
+
+threading.Thread(target=serve_grpc, daemon=True).start()
