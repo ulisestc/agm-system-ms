@@ -11,3 +11,4 @@ localResources:
     - ../proto/reportes.proto
     - ../microservices/ms-asistencias/asistencias.proto
     - ../proto/auth.proto
+    - ../proto/calificaciones.proto
