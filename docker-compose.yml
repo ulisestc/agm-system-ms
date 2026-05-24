@@ -48,14 +48,8 @@ services:
     restart: always
     ports:
       - "8000:8000"
-      - "50051:50051"
-    env_file:
-      - ./microservices/ms-auth/.env
     environment:
       - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/agm_auth_db
-      - GRPC_PORT=50051
-      - ENABLE_GRPC_SERVER=true
-      - MS_NOTIFICACIONES_URL=ms-notificaciones:50056
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       - RESET_PASSWORD_TOKEN_EXPIRE_MINUTES=30
       - RESET_PASSWORD_EXPOSE_TOKEN=true
@@ -72,17 +66,16 @@ services:
     restart: always
     ports:
       - "8005:8005"
-      - "50055:50055"
     env_file:
       - ./microservices/ms-asistencias/.env
     environment:
       - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/attendance_db
       - REDIS_URL=redis://redis-db:6379/0
-      - GRPC_PORT=50055
-      - MS_DOCENTES_URL=ms-docentes:50053
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
     depends_on:
       - postgres-db
       - redis-db
+      - rabbitmq
     
   ms-notificaciones:
       build: 
@@ -95,11 +88,7 @@ services:
       environment:
         - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/agm_notificaciones_db
         - SMTP_HOST=smtp4dev
-        - MS_MATERIAS_URL=ms-periodos-materias:50052
-        - MS_ALUMNOS_URL=ms-docentes:50053
         - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
-      ports:
-        - "50056:50056"
       depends_on:
         - postgres-db
         - smtp4dev
@@ -114,13 +103,13 @@ services:
     restart: always
     ports:
       - "8003:8003"
-      - "50053:50053"
     environment:
       - DB_URL=postgresql://postgres:root@postgres-db:5432/agm_docentes_db
       - REST_PORT=8003
-      - GRPC_PORT=50053
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
     depends_on:
       - postgres-db
+      - rabbitmq
 
   # MS-4 Calificaciones
   ms-calificaciones:
@@ -131,11 +120,13 @@ services:
     restart: always
     ports:
       - "8004:8004"
-      - "50054:50054"
     env_file:
       - ./microservices/ms-calificaciones/.env
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
     depends_on:
       - postgres-db
+      - rabbitmq
 
   ms-periodos-materias:
     build:
@@ -151,14 +142,12 @@ services:
       - DB_NAME=agm_periodos_materias_db
       - DB_USER=postgres
       - DB_PASSWORD=root
-      - GRPC_PORT=50052
-      - MS_NOTIFICACIONES_URL=ms-notificaciones:50056
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
     ports:
       - "8001:8000"
-      - "50052:50052"
     depends_on:
       - postgres-db
-      - ms-notificaciones
+      - rabbitmq
  
   # MS-7 Reportes
   ms-reportes:
@@ -169,20 +158,16 @@ services:
     restart: always
     ports:
       - "8007:8007"
-      - "50057:50057"
     environment:
       - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/reports_db
-      - GRPC_PORT=50057
       - JWT_SECRET=clave_super_secreta_desarrollo_agm
-      - MS_PERIODOS_URL=ms-periodos-materias:50052
-      - MS_ALUMNOS_URL=ms-docentes:50053
-      - MS_ASISTENCIAS_URL=ms-asistencias:50055
-      - MS_CALIFICACIONES_URL=ms-calificaciones:50054
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
     depends_on:
       - postgres-db
       - ms-periodos-materias
       - ms-docentes
       - ms-asistencias
+      - rabbitmq
 
   gateway:
     build:

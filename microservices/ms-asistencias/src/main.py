@@ -7,9 +7,9 @@ import json
 from datetime import datetime
 
 from src.database import engine, Base, get_db, redis_client
-from src import grpc_server
+from src import rabbitmq_server
 from src import models, schemas
-from src.grpc_client import validar_alumno_en_materia
+from src.rabbitmq_client import validar_alumno_en_materia
 
 # Crear tablas en PostgreSQL si no existen
 Base.metadata.create_all(bind=engine)
@@ -201,15 +201,15 @@ def historial_asistencias(
         "message": "Historial paginado obtenido correctamente."
     }
 
-def _start_grpc():
+def _start_rabbitmq():
     try:
-        grpc_server.serve()
+        rabbitmq_server.serve()
     except Exception as e:
-        print(f"[WARNING] No se pudo iniciar el servidor gRPC: {e}")
+        print(f"[WARNING] No se pudo iniciar el servidor RabbitMQ-RPC: {e}")
 
 
-# Evento de inicio de FastAPI para arrancar el servidor gRPC en segundo plano
+# Evento de inicio de FastAPI para arrancar el servidor RabbitMQ en segundo plano
 @app.on_event("startup")
 def startup_event():
-    grpc_thread = threading.Thread(target=_start_grpc, daemon=True)
-    grpc_thread.start()
+    rb_thread = threading.Thread(target=_start_rabbitmq, daemon=True)
+    rb_thread.start()

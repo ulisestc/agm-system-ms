@@ -14,7 +14,6 @@ from notification_client import send_reset_password_email
 from settings import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     ALGORITHM,
-    ENABLE_GRPC_SERVER,
     RESET_PASSWORD_EXPOSE_TOKEN,
     RESET_PASSWORD_TOKEN_EXPIRE_MINUTES,
     SECRET_KEY,
@@ -228,19 +227,16 @@ def leer_usuario_actual(usuario_actual: models.Usuario = Depends(get_usuario_act
     return usuario_actual
 
 
-def _start_grpc():
+def _start_rabbitmq():
     try:
-        import grpc_server
-
-        grpc_server.serve()
+        import rabbitmq_server
+        rabbitmq_server.serve()
     except Exception as exc:
-        print(f"[WARNING] No se pudo iniciar el servidor gRPC de ms-auth: {exc}")
+        print(f"[WARNING] No se pudo iniciar el servidor RabbitMQ-RPC de ms-auth: {exc}")
 
 
 @app.on_event("startup")
 def startup_event():
-    if not ENABLE_GRPC_SERVER:
-        return
-
-    grpc_thread = threading.Thread(target=_start_grpc, daemon=True)
-    grpc_thread.start()
+    # Iniciamos RabbitMQ RPC en un hilo separado
+    rb_thread = threading.Thread(target=_start_rabbitmq, daemon=True)
+    rb_thread.start()

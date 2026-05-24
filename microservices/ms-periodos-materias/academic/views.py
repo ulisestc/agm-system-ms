@@ -2,9 +2,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-import grpc
-
-from .grpc_notifications import send_cierre_materia
+from .notifications import send_cierre_materia
 from .models import Periodo, Materia
 from .pagination import APIPageNumberPagination
 from .serializers import PeriodoSerializer, MateriaSerializer

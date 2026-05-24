@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database import engine, Base, get_db
 from auth import get_current_user, require_roles
-import models, schemas, grpc_client
+import models, schemas, rabbitmq_client
 from generadores import (
     generar_excel_calificaciones, generar_pdf_calificaciones,
     generar_excel_asistencias,    generar_pdf_asistencias,
@@ -18,19 +18,18 @@ from generadores import (
 Base.metadata.create_all(bind=engine)
 
 
-def _start_grpc():
+def _start_rabbitmq():
     try:
-        import grpc_server
-        grpc_server.serve()
+        import rabbitmq_server
+        rabbitmq_server.serve()
     except Exception as e:
-        print(f"[WARNING] No se pudo iniciar el servidor gRPC: {e}")
-        print("          Ejecuta generate_grpc.py para generar los stubs.")
+        print(f"[WARNING] No se pudo iniciar el servidor RabbitMQ-RPC: {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    grpc_thread = threading.Thread(target=_start_grpc, daemon=True)
-    grpc_thread.start()
+    rb_thread = threading.Thread(target=_start_rabbitmq, daemon=True)
+    rb_thread.start()
     yield
 
 
@@ -75,8 +74,8 @@ def reporte_calificaciones(
     try:
         datos = None
         try:
-            materia_info = grpc_client.get_materia_by_id(int(materia_id))
-            alumnos      = grpc_client.get_alumnos_by_materia(materia_id) or []
+            materia_info = rabbitmq_client.get_materia_by_id(int(materia_id))
+            alumnos      = rabbitmq_client.get_alumnos_by_materia(materia_id) or []
             if materia_info:
                 datos = {
                     "materia_nombre": materia_info["nombre"],
@@ -168,9 +167,9 @@ def reporte_asistencias(
     try:
         datos = None
         try:
-            materia_info = grpc_client.get_materia_by_id(int(materia_id))
-            alumnos      = grpc_client.get_alumnos_by_materia(materia_id) or []
-            sesiones     = grpc_client.construir_sesiones_asistencia(alumnos, materia_id)
+            materia_info = rabbitmq_client.get_materia_by_id(int(materia_id))
+            alumnos      = rabbitmq_client.get_alumnos_by_materia(materia_id) or []
+            sesiones     = rabbitmq_client.construir_sesiones_asistencia(alumnos, materia_id)
             if materia_info:
                 datos = {
                     "materia_nombre": materia_info["nombre"],

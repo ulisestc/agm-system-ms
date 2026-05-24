@@ -1,13 +1,11 @@
-const grpc = require('@grpc/grpc-js');
-const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 const nodemailer = require('nodemailer');
 const amqp = require('amqplib');
-const db = require('./db'); // para logs
+const db = require('./db');
+const rpcClient = require('./rabbitmq_client');
 
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') }); // variables de entorno
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-//config de mail
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT, 10),
@@ -15,223 +13,152 @@ const transporter = nodemailer.createTransport({
     auth: process.env.SMTP_USER ? {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
-    } : undefined, // Si no hay usuario (como en smtp4dev), no usa auth
+    } : undefined,
     ignoreTLS: process.env.SMTP_HOST === 'localhost' 
 });
 
-// ruta del contrato(s) grpc
-const PROTO_PATH = path.resolve(__dirname, '../../../proto/notificaciones.proto');
-const periodosMateriasProtoPath = path.resolve(__dirname, '../../../proto/periodosmaterias.proto');
-const alumnosDocentesProtoPath = path.resolve(__dirname, '../../../proto/alumnosdocentes.proto');
+async function sendBienvenida(data, callback) {
+    const { alumnoId, materiaId, claveUnica } = data;
+    console.log(`\n[Event] Procesando Bienvenida...`);
 
-// opciones proto
-const protoOptions = { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true };
+    try {
+        const alumnoResp = await rpcClient.call('rpc_docentes_queue', 'get_alumno_by_id', { id: alumnoId });
+        if (!alumnoResp.success) throw new Error("Alumno no encontrado");
+        const alumnoData = alumnoResp.data;
 
-// Cargar el paquete(s) gRPC
-const notificacionesPackageDef = protoLoader.loadSync(PROTO_PATH, protoOptions);
-const materiasPackageDef = protoLoader.loadSync(periodosMateriasProtoPath, protoOptions);
-const alumnosPackageDef = protoLoader.loadSync(alumnosDocentesProtoPath, protoOptions);
+        const materiaResp = await rpcClient.call('rpc_periodos_queue', 'get_materia_by_id', { id: materiaId });
+        if (!materiaResp.success) throw new Error("Materia no encontrada");
+        const materiaData = materiaResp.data;
 
-// convertir a objetos gRPC
-const notificacionesProto = grpc.loadPackageDefinition(notificacionesPackageDef).notificaciones;
-const materiasProto = grpc.loadPackageDefinition(materiasPackageDef).agm.periodosmaterias.v1;
-const alumnosProto = grpc.loadPackageDefinition(alumnosPackageDef).alumnos;
+        const mailOptions = {
+            from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
+            to: alumnoData.email,
+            subject: `¡Bienvenido a la materia: ${materiaData.nombre}!`,
+            html: `
+                <h2>Hola ${alumnoData.nombre}</h2>
+                <p>Tu registro en la materia <b>${materiaData.nombre}</b> ha sido exitoso.</p>
+                <p>Tu clave única de acceso al sistema es: <b>AGM-${claveUnica}</b></p>
+                <p>Por favor, ingresa al portal para cambiarla.</p>
+            `
+        };
 
-// instanciar clientes 
-const materiasCliente = new materiasProto.PeriodosMateriasService(
-    process.env.MS_MATERIAS_URL || 'localhost:50052', 
-    grpc.credentials.createInsecure()
-);
-
-const alumnosCliente = new alumnosProto.DocentesAlumnosService(
-    process.env.MS_ALUMNOS_URL || 'localhost:50053', 
-    grpc.credentials.createInsecure()
-);
-
-
-// Los Controladores (Handlers)
-// Se definen las funciones definidas en el contrato
-function sendBienvenida(call, callback) {
-    const { alumnoId, materiaId, claveUnica } = call.request;
-    console.log(`\n[gRPC] Petición de Bienvenida recibida. Buscando datos...`);
-
-    // 1. Pedimos los datos del alumno al MS-3
-    alumnosCliente.GetAlumnoById({ id: alumnoId }, (errorAlumno, alumnoData) => {
-        if (errorAlumno) {
-            console.error("Falló al buscar alumno:", errorAlumno.details);
-            return callback(null, { success: false, error_message: "No se encontró el alumno" });
-        }
-
-        // 2. Si el alumno existe, pedimos los datos de la materia al MS-2
-        materiasCliente.GetMateriaById({ id: materiaId }, (errorMateria, materiaData) => {
-            if (errorMateria) {
-                console.error("Falló al buscar materia:", errorMateria.details);
-                return callback(null, { success: false, error_message: "No se encontró la materia" });
+        transporter.sendMail(mailOptions, async (errorEnvio, info) => {
+            if (errorEnvio) {
+                console.error("Fallo SMTP:", errorEnvio);
+                await db.query('INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                    ['bienvenida', alumnoData.email, alumnoId.toString(), 'fallido']);
+                callback(errorEnvio);
+            } else {
+                console.log(`-> ÉXITO: Correo despachado: ${info.messageId}`);
+                await db.query('INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                    ['bienvenida', alumnoData.email, alumnoId.toString(), 'enviado']);
+                callback(null, { success: true });
             }
-
-            // 3. Armar las opciones del correo usando los datos recuperados de gRPC
-            const mailOptions = {
-                from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
-                to: alumnoData.email,
-                subject: `¡Bienvenido a la materia: ${materiaData.nombre}!`,
-                html: `
-                    <h2>Hola ${alumnoData.nombre}</h2>
-                    <p>Tu registro en la materia <b>${materiaData.nombre}</b> ha sido exitoso.</p>
-                    <p>Tu clave única de acceso al sistema es: <b>AGM-${claveUnica}</b></p>
-                    <p>Por favor, ingresa al portal para cambiarla.</p>
-                `
-            };
-
-            // 4. Disparar el correo asíncronamente
-            transporter.sendMail(mailOptions, (errorEnvio, info) => {
-                if (errorEnvio) {
-                    console.error("Fallo crítico en Nodemailer:", errorEnvio);
-                    // Log del fallo en la base de datos
-                    db.query(
-                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
-                        ['bienvenida', alumnoData.email, alumnoId.toString(), 'fallido']
-                    ).catch(err => console.error('Error al guardar log de fallo:', err));
-                    // Si el correo falló, le decimos a gRPC que hubo un error lógico
-                    callback(null, { success: false, error_message: "Error al enviar el correo SMTP" });
-                } else {
-                    console.log(`-> ÉXITO: Correo despachado con ID: ${info.messageId}`);
-                    // Log del éxito en la base de datos
-                    db.query(
-                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
-                        ['bienvenida', alumnoData.email, alumnoId.toString(), 'enviado']
-                    ).catch(err => console.error('Error al guardar log de éxito:', err));
-                    // Si el correo salió bien, le avisamos a gRPC que la operación fue un éxito total
-                    callback(null, { success: true, error_message: "" });
-                }
-            });
         });
-    });
+    } catch (err) {
+        console.error("Error en sendBienvenida:", err.message);
+        callback(err);
+    }
 }
 
-function sendBajaNotif(call, callback) {
-    const { alumnoId, docenteId } = call.request;
-    console.log(`\n[gRPC] Petición de Baja recibida. Buscando datos...`);
+async function sendBajaNotif(data, callback) {
+    const { alumnoId, docenteId } = data;
+    console.log(`\n[Event] Procesando Baja...`);
 
-    // 1. Obtener datos del Alumno
-    alumnosCliente.GetAlumnoById({ id: alumnoId }, (errorAlumno, alumnoData) => {
-        if (errorAlumno) {
-            console.error("Falló al buscar alumno:", errorAlumno.details);
-            return callback(null, { success: false, error_message: "Alumno no encontrado" });
-        }
+    try {
+        const alumnoResp = await rpcClient.call('rpc_docentes_queue', 'get_alumno_by_id', { id: alumnoId });
+        if (!alumnoResp.success) throw new Error("Alumno no encontrado");
+        const alumnoData = alumnoResp.data;
 
-        // 2. Obtener datos del Docente
-        alumnosCliente.GetDocenteById({ id: docenteId }, (errorDocente, docenteData) => {
-            if (errorDocente) {
-                console.error("Falló al buscar docente:", errorDocente.details);
-                return callback(null, { success: false, error_message: "Docente no encontrado" });
+        const docenteResp = await rpcClient.call('rpc_docentes_queue', 'get_docente_by_id', { id: docenteId });
+        if (!docenteResp.success) throw new Error("Docente no encontrado");
+        const docenteData = docenteResp.data;
+
+        const mailOptions = {
+            from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
+            to: docenteData.email,
+            subject: `Aviso del Sistema: Baja de Alumno - ${alumnoData.nombre}`,
+            html: `
+                <h2>Hola Profesor(a) ${docenteData.nombre},</h2>
+                <p>Le notificamos oficialmente que el alumno <b>${alumnoData.nombre}</b> ha procesado su baja de la materia.</p>
+                <p>Este cambio ya se refleja en su concentrado de alumnos.</p>
+            `
+        };
+
+        transporter.sendMail(mailOptions, async (errorEnvio, info) => {
+            if (errorEnvio) {
+                console.error("Fallo SMTP:", errorEnvio);
+                await db.query('INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                    ['baja', docenteData.email, docenteId.toString(), 'fallido']);
+                callback(errorEnvio);
+            } else {
+                console.log(`-> ÉXITO: Correo de baja enviado. ID: ${info.messageId}`);
+                await db.query('INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                    ['baja', docenteData.email, docenteId.toString(), 'enviado']);
+                callback(null, { success: true });
             }
-
-            // 3. Armar el correo dirigido al docente
-            const mailOptions = {
-                from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
-                to: docenteData.email,
-                subject: `Aviso del Sistema: Baja de Alumno - ${alumnoData.nombre}`,
-                html: `
-                    <h2>Hola Profesor(a) ${docenteData.nombre},</h2>
-                    <p>Le notificamos oficialmente que el alumno <b>${alumnoData.nombre}</b> ha procesado su baja de la materia.</p>
-                    <p>Este cambio ya se refleja en su concentrado de alumnos.</p>
-                `
-            };
-
-            // 4. Enviar correo asíncronamente
-            transporter.sendMail(mailOptions, (errorEnvio, info) => {
-                if (errorEnvio) {
-                    console.error("Fallo SMTP en Baja:", errorEnvio);
-                    // Log del fallo en la base de datos
-                    db.query(
-                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
-                        ['baja', docenteData.email, docenteId.toString(), 'fallido']
-                    ).catch(err => console.error('Error al guardar log de fallo:', err));
-                    callback(null, { success: false, error_message: "Error al enviar el correo SMTP" });
-                } else {
-                    console.log(`-> ÉXITO: Correo de baja notificado al docente. ID: ${info.messageId}`);
-                    // Log del éxito en la base de datos
-                    db.query(
-                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
-                        ['baja', docenteData.email, docenteId.toString(), 'enviado']
-                    ).catch(err => console.error('Error al guardar log de éxito:', err));
-                    callback(null, { success: true, error_message: "" });
-                }
-            });
         });
-    });
+    } catch (err) {
+        console.error("Error en sendBajaNotif:", err.message);
+        callback(err);
+    }
 }
 
-function sendCierreMateria(call, callback) {
-    const { materiaId } = call.request;
-    console.log(`\n[gRPC] Petición de Cierre de Materia recibida. Buscando datos...`);
+async function sendCierreMateria(data, callback) {
+    const { materiaId } = data;
+    console.log(`\n[Event] Procesando Cierre de Materia...`);
 
-    // 1. Obtener datos de la Materia
-    materiasCliente.GetMateriaById({ id: materiaId }, (errorMateria, materiaData) => {
-        if (errorMateria) {
-            console.error("Falló al buscar materia:", errorMateria.details);
-            return callback(null, { success: false, error_message: "Materia no encontrada" });
+    try {
+        const materiaResp = await rpcClient.call('rpc_periodos_queue', 'get_materia_by_id', { id: materiaId });
+        if (!materiaResp.success) throw new Error("Materia no encontrada");
+        const materiaData = materiaResp.data;
+
+        const alumnosResp = await rpcClient.call('rpc_docentes_queue', 'get_alumnos_by_materia', { materiaId: materiaId });
+        const alumnos = alumnosResp.alumnos || [];
+
+        if (alumnos.length === 0) {
+            console.log("-> Sin alumnos a notificar.");
+            return callback(null, { success: true });
         }
 
-        // 2. Obtener la lista completa de alumnos inscritos
-        alumnosCliente.GetAlumnosByMateria({ materiaId: materiaId }, (errorAlumnos, response) => {
-            if (errorAlumnos) {
-                console.error("Falló al obtener lista de alumnos:", errorAlumnos.details);
-                return callback(null, { success: false, error_message: "Error al consultar lista de alumnos" });
+        const correosBcc = alumnos.map(a => a.email).join(', ');
+
+        const mailOptions = {
+            from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
+            to: process.env.MAIL_FROM,
+            bcc: correosBcc,
+            subject: `Aviso Académico: Cierre de la materia ${materiaData.nombre}`,
+            html: `
+                <h2>Aviso Importante</h2>
+                <p>Estimado alumno, le notificamos que el docente ha cerrado oficialmente la evaluación para la materia: <b>${materiaData.nombre}</b>.</p>
+                <p>Sus calificaciones finales ya han sido publicadas y no están sujetas a más modificaciones.</p>
+                <p>Por favor, ingrese al sistema AGM para revisar su concentrado.</p>
+            `
+        };
+
+        transporter.sendMail(mailOptions, async (errorEnvio, info) => {
+            if (errorEnvio) {
+                console.error("Fallo SMTP:", errorEnvio);
+                await db.query('INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                    ['cierre_materia', correosBcc, materiaId.toString(), 'fallido']);
+                callback(errorEnvio);
+            } else {
+                console.log(`-> ÉXITO: Correos de cierre enviados. ID: ${info.messageId}`);
+                await db.query('INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                    ['cierre_materia', correosBcc, materiaId.toString(), 'enviado']);
+                callback(null, { success: true });
             }
-
-            const alumnos = response.alumnos || [];
-            if (alumnos.length === 0) {
-                console.log("-> AVISO: La materia se cerró pero no tenía alumnos inscritos.");
-                return callback(null, { success: true, error_message: "Sin alumnos a notificar" });
-            }
-
-            // Extraer correos y unirlos por comas para el BCC
-            const correosBcc = alumnos.map(a => a.email).join(', ');
-
-            // 3. Armar el correo masivo
-            const mailOptions = {
-                from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
-                to: process.env.MAIL_FROM, // Se envía al sistema mismo
-                bcc: correosBcc, // Todos los alumnos reciben copia oculta
-                subject: `Aviso Académico: Cierre de la materia ${materiaData.nombre}`,
-                html: `
-                    <h2>Aviso Importante</h2>
-                    <p>Estimado alumno, le notificamos que el docente ha cerrado oficialmente la evaluación para la materia: <b>${materiaData.nombre}</b>.</p>
-                    <p>Sus calificaciones finales ya han sido publicadas y no están sujetas a más modificaciones.</p>
-                    <p>Por favor, ingrese al sistema AGM para revisar su concentrado.</p>
-                `
-            };
-
-            // 4. Enviar correo asíncronamente
-            transporter.sendMail(mailOptions, (errorEnvio, info) => {
-                if (errorEnvio) {
-                    console.error("Fallo SMTP en Cierre:", errorEnvio);
-                    // Log del fallo en la base de datos
-                    db.query(
-                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
-                        ['cierre_materia', correosBcc, materiaId.toString(), 'fallido']
-                    ).catch(err => console.error('Error al guardar log de fallo:', err));
-                    callback(null, { success: false, error_message: "Error al enviar el correo masivo" });
-                } else {
-                    console.log(`-> ÉXITO: Correos de cierre enviados a ${alumnos.length} alumnos. ID: ${info.messageId}`);
-                    // Log del éxito en la base de datos
-                    db.query(
-                        'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
-                        ['cierre_materia', correosBcc, materiaId.toString(), 'enviado']
-                    ).catch(err => console.error('Error al guardar log de éxito:', err));
-                    callback(null, { success: true, error_message: "" });
-                }
-            });
         });
-    });
+    } catch (err) {
+        console.error("Error en sendCierreMateria:", err.message);
+        callback(err);
+    }
 }
 
-function sendResetPassword(call, callback) {
-    const { email, token } = call.request;
-    console.log(`\n[gRPC] Petición de Reset Password recibida para: ${email}`);
+async function sendResetPassword(data, callback) {
+    const { email, token } = data;
+    console.log(`\n[Event] Procesando Reset Password para: ${email}`);
 
-    // Asumimos que el frontend de Angular correrá en algún puerto estándar como 4200
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
     const resetUrl = `${baseUrl}/restablecer?token=${token}`;
 
@@ -248,111 +175,90 @@ function sendResetPassword(call, callback) {
         `
     };
 
-    transporter.sendMail(mailOptions, (errorEnvio, info) => {
+    transporter.sendMail(mailOptions, async (errorEnvio, info) => {
         if (errorEnvio) {
-            console.error("Fallo SMTP en Reset Password:", errorEnvio);
-            // Log del fallo en la base de datos
-            db.query(
-                'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
-                ['reset_password', email, null, 'fallido']
-            ).catch(err => console.error('Error al guardar log de fallo:', err));
-            callback(null, { success: false, error_message: "Error al enviar el enlace de recuperación" });
+            console.error("Fallo SMTP:", errorEnvio);
+            await db.query('INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                ['reset_password', email, null, 'fallido']);
+            callback(errorEnvio);
         } else {
-            console.log(`-> ÉXITO: Correo de recuperación enviado a ${email}. ID: ${info.messageId}`);
-            // Log del éxito en la base de datos
-            db.query(
-                'INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
-                ['reset_password', email, null, 'enviado']
-            ).catch(err => console.error('Error al guardar log de éxito:', err));
-            callback(null, { success: true, error_message: "" });
+            console.log(`-> ÉXITO: Correo de recuperación enviado. ID: ${info.messageId}`);
+            await db.query('INSERT INTO historial_correos (tipo_notificacion, destinatario, referencia_id, estado) VALUES ($1, $2, $3, $4)',
+                ['reset_password', email, null, 'enviado']);
+            callback(null, { success: true });
         }
-    });
-}
-
-// Arranque del server gRPC
-function main() {
-    const server = new grpc.Server();
-    
-    // Vinculamos el servicio definido en el .proto con nuestras funciones
-    server.addService(notificacionesProto.NotificacionesService.service, {
-        SendBienvenida: sendBienvenida,
-        SendBajaNotif: sendBajaNotif,
-        SendCierreMateria: sendCierreMateria,
-        SendResetPassword: sendResetPassword
-    });
-
-    const port = process.env.GRPC_PORT || '50056';
-    const host = `0.0.0.0:${port}`; // puerto grpc
-    
-    server.bindAsync(host, grpc.ServerCredentials.createInsecure(), (error, port) => {
-        if (error) {
-            console.error(error);
-            return;
-        }
-        console.log(`Microservicio de Notificaciones escuchando gRPC en ${host}`);
-        startRabbitMQ();
     });
 }
 
 async function startRabbitMQ() {
     const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
+    const exchange = 'events_exchange';
+    const queue = 'notifications_queue';
+    const routingKeys = [
+        'auth.reset_password',
+        'periodos.materia_cerrada',
+        'periodos.bienvenida',
+        'docentes.baja'
+    ];
+
     try {
         const connection = await amqp.connect(rabbitUrl);
         const channel = await connection.createChannel();
-        const queue = 'notifications_queue';
 
+        await channel.assertExchange(exchange, 'topic', { durable: true });
         await channel.assertQueue(queue, { durable: true });
-        console.log(`[RabbitMQ] Escuchando cola: ${queue}`);
 
-        channel.consume(queue, (msg) => {
+        for (const key of routingKeys) {
+            await channel.bindQueue(queue, exchange, key);
+        }
+
+        console.log(`[RabbitMQ] Notificaciones escuchando exchange: ${exchange}`);
+
+        channel.consume(queue, async (msg) => {
             if (msg !== null) {
                 try {
+                    const routingKey = msg.fields.routingKey;
                     const content = JSON.parse(msg.content.toString());
-                    const { type, data } = content;
-                    console.log(`[RabbitMQ] Recibido tipo: ${type}`);
+                    console.log(`[RabbitMQ] Recibido evento: ${routingKey}`);
 
-                    const fakeCall = { request: data };
-                    const fakeCallback = (err, response) => {
-                        if (err || (response && !response.success)) {
-                            console.error(`[RabbitMQ] Error en ${type}:`, err || response.error_message);
-                        } else {
-                            console.log(`[RabbitMQ] Éxito en ${type}`);
-                        }
+                    const callback = (err) => {
+                        if (err) console.error(`Error procesando ${routingKey}:`, err.message);
+                        channel.ack(msg);
                     };
 
-                    switch (type) {
-                        case 'bienvenida':
-                            sendBienvenida(fakeCall, fakeCallback);
+                    switch (routingKey) {
+                        case 'periodos.bienvenida':
+                            await sendBienvenida(content, callback);
                             break;
-                        case 'baja':
-                            sendBajaNotif(fakeCall, fakeCallback);
+                        case 'docentes.baja':
+                            await sendBajaNotif(content, callback);
                             break;
-                        case 'cierre_materia':
-                            sendCierreMateria(fakeCall, fakeCallback);
+                        case 'periodos.materia_cerrada':
+                            await sendCierreMateria(content, callback);
                             break;
-                        case 'reset_password':
-                            sendResetPassword(fakeCall, fakeCallback);
+                        case 'auth.reset_password':
+                            await sendResetPassword(content, callback);
                             break;
                         default:
-                            console.warn(`[RabbitMQ] Tipo desconocido: ${type}`);
+                            console.warn(`Evento desconocido: ${routingKey}`);
+                            channel.ack(msg);
                     }
-                    channel.ack(msg);
                 } catch (parseError) {
-                    console.error("[RabbitMQ] Error parseando mensaje:", parseError);
-                    channel.nack(msg, false, false); // No reencolar si el JSON está mal
+                    console.error("Error parseando mensaje:", parseError);
+                    channel.nack(msg, false, false);
                 }
             }
         });
 
-        connection.on('error', (err) => {
-            console.error("[RabbitMQ] Error de conexión:", err);
-            setTimeout(startRabbitMQ, 5000);
-        });
-
     } catch (error) {
-        console.error("[RabbitMQ] Fallo al conectar:", error.message);
+        console.error("Fallo al conectar RabbitMQ:", error.message);
         setTimeout(startRabbitMQ, 5000);
     }
+}
+
+async function main() {
+    console.log("Microservicio de Notificaciones iniciado");
+    await startRabbitMQ();
 }
 
 main();

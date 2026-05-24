@@ -4,22 +4,25 @@ import os
 import sys
 import socket
 
+# Obtener la ruta base del proyecto (un nivel arriba de /tests)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # Configuración de servicios y sus endpoints de salud
 SERVICES = {
     "MS-Auth": {
         "url": "http://localhost:8000/",
         "test_script": "test_auth.py",
-        "cwd": "microservices/ms-auth"
+        "cwd": os.path.join(BASE_DIR, "microservices/ms-auth")
     },
     "MS-Periodos-Materias": {
         "url": "http://localhost:8001/api/periodos/",
         "test_command": [sys.executable, "manage.py", "test"],
-        "cwd": "microservices/ms-periodos-materias"
+        "cwd": os.path.join(BASE_DIR, "microservices/ms-periodos-materias")
     },
     "MS-Docentes": {
         "url": "http://localhost:8003/",
         "test_script": "test_api.py",
-        "cwd": "microservices/ms-docentes"
+        "cwd": os.path.join(BASE_DIR, "microservices/ms-docentes")
     },
     "MS-Calificaciones": {
         "url": "http://localhost:8004/",
@@ -30,10 +33,10 @@ SERVICES = {
     "MS-Reportes": {
         "url": "http://localhost:8007/",
     },
-    "MS-Notificaciones (gRPC)": {
+    "RabbitMQ (Broker)": {
         "host": "localhost",
-        "port": 50056,
-        "type": "grpc"
+        "port": 5672,
+        "type": "tcp"
     }
 }
 
@@ -56,7 +59,7 @@ def check_tcp_port(host, port):
         sock.close()
 
 def check_health(name, config):
-    if config.get("type") == "grpc":
+    if config.get("type") == "tcp":
         return check_tcp_port(config["host"], config["port"])
     
     url = config.get("url")

@@ -1,56 +1,59 @@
-import grpc
-import sys
+import pika
+import json
 import os
 
-# Añadimos el path para encontrar los protos generados
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import notificaciones_pb2
-import notificaciones_pb2_grpc
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672")
 
-GRPC_HOST = "localhost:50056"
-
-def test_notificaciones_grpc():
+def test_notificaciones_rabbitmq():
     print("====================================================")
-    print("   TESTING MS-NOTIFICACIONES (gRPC Direct)          ")
+    print("   TESTING MS-NOTIFICACIONES (RabbitMQ Events)      ")
     print("====================================================\n")
 
     try:
-        channel = grpc.insecure_channel(GRPC_HOST)
-        stub = notificaciones_pb2_grpc.NotificacionesServiceStub(channel)
+        params = pika.URLParameters(RABBITMQ_URL)
+        connection = pika.BlockingConnection(params)
+        channel = connection.channel()
+        
+        exchange = 'events_exchange'
+        channel.exchange_declare(exchange=exchange, exchange_type='topic', durable=True)
 
-        # 1. Probar Reset Password (No depende de otros microservicios para el mail)
-        print("[1] Enviando petición de Reset Password...", end=" ")
-        req = notificaciones_pb2.ResetPasswordRequest(
-            email="test_user@buap.mx",
-            token="secure-token-123"
+        # 1. Probar Reset Password (Pub/Sub)
+        print("[1] Publicando evento Reset Password...", end=" ")
+        msg_reset = {
+            "email": "test_user@buap.mx",
+            "token": "secure-token-123"
+        }
+        channel.basic_publish(
+            exchange=exchange,
+            routing_key='auth.reset_password',
+            body=json.dumps(msg_reset),
+            properties=pika.BasicProperties(delivery_mode=2)
         )
-        res = stub.SendResetPassword(req)
-        if res.success:
-            print("OK (Correo enviado)")
-        else:
-            print(f"FAILED ({res.error_message})")
+        print("OK (Evento encolado)")
 
-        # 2. Probar Bienvenida (Ojo: Esto llamará por gRPC interno a MS-Auth/MS-Periodos)
-        # Si no existen los IDs fallará, pero probamos la conectividad.
-        print("[2] Enviando Bienvenida (Integración gRPC)...", end=" ")
-        req_welcome = notificaciones_pb2.BienvenidaRequest(
-            alumnoId="1",
-            materiaId="1",
-            claveUnica="TEST-CLAVE"
+        # 2. Probar Bienvenida (Pub/Sub + RPC interno)
+        # Nota: Esto provocará que ms-notificaciones llame vía RPC a ms-docentes y ms-periodos
+        print("[2] Publicando evento Bienvenida...", end=" ")
+        msg_welcome = {
+            "alumnoId": "1",
+            "materiaId": "1",
+            "claveUnica": "TEST-RABBIT"
+        }
+        channel.basic_publish(
+            exchange=exchange,
+            routing_key='periodos.bienvenida',
+            body=json.dumps(msg_welcome),
+            properties=pika.BasicProperties(delivery_mode=2)
         )
-        res_welcome = stub.SendBienvenida(req_welcome)
-        if res_welcome.success:
-            print("OK")
-        else:
-            # Es normal que falle si no hay datos reales, pero validamos que el MS responda
-            print(f"RESPUESTA MS: {res_welcome.error_message}")
+        print("OK (Evento encolado)")
 
+        connection.close()
         print("\n====================================================")
         print("   PRUEBAS DE MS-NOTIFICACIONES FINALIZADAS         ")
         print("====================================================")
 
     except Exception as e:
-        print(f"\n💥 ERROR CRÍTICO gRPC: {e}")
+        print(f"\n💥 ERROR RabbitMQ: {e}")
 
 if __name__ == "__main__":
-    test_notificaciones_grpc()
+    test_notificaciones_rabbitmq()
