@@ -1,6 +1,26 @@
 const emailService = require('../services/email.service');
 
 class NotificationController {
+    async handleRetardo(data) {
+        const { alumno_id, materia_id, sesion_id, timestamp } = data;
+        const alertEmail = process.env.ALERT_EMAIL || process.env.MAIL_FROM;
+
+        const mailOptions = {
+            from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
+            to: alertEmail,
+            subject: `Alerta de Retardo - Alumno ${alumno_id}`,
+            html: `
+                <h2>Alerta de Retardo</h2>
+                <p>Se registró un retardo en la materia <b>${materia_id}</b>.</p>
+                <p><b>Alumno:</b> ${alumno_id}</p>
+                <p><b>Sesión:</b> ${sesion_id}</p>
+                <p><b>Fecha y hora:</b> ${timestamp}</p>
+            `
+        };
+
+        return await emailService.sendMail(mailOptions, 'retardo', sesion_id || alumno_id || null);
+    }
+
     async handleBienvenida(data) {
         const { alumnoNombre, alumnoEmail, alumnoId, materiaNombre, claveUnica } = data;
         

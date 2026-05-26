@@ -9,6 +9,7 @@ from datetime import datetime
 from src.database import engine, Base, get_db, redis_client
 from src import rabbitmq_server
 from src import models, schemas
+from src.rabbitmq_manager import RabbitMQManager
 from src.rabbitmq_client import validar_alumno_en_materia
 from src.auth_middleware import get_current_user, require_roles
 
@@ -19,6 +20,8 @@ app = FastAPI(
     description="Gestión de sesiones de 10 min y validación de tokens dinámicos.",
     version="1.0.0"
 )
+
+event_publisher = RabbitMQManager()
 
 app.add_middleware(
     CORSMiddleware,
@@ -150,6 +153,21 @@ def registrar_asistencia(
             detail="Código QR inválido o ya utilizado (Anti-replay)."
         )
 
+    # 2.5 Validar propiedad del QR 
+    token_owner = redis_client.get(f"qr_token:{req.token_qr}")
+
+    if not token_owner:
+        raise HTTPException(
+            status_code=404,
+            detail="El token QR proporcionado no existe o ha expirado."
+        )
+
+    if token_owner != req.alumno_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Este código QR no pertenece al alumno que intenta registrar la asistencia."
+        )
+
     # 3. Validar inscripción vía RabbitMQ → ms-docentes
     esta_inscrito = validar_alumno_en_materia(req.alumno_id, req.materia_id)
     if not esta_inscrito:
@@ -173,6 +191,19 @@ def registrar_asistencia(
     )
     db.add(nuevo_registro)
     db.commit()
+
+    # 5.5 Publicar evento asíncrono si hay Retardo (Pub/Sub)
+    if estado == "Retardo":
+        event_publisher.publish_event(
+            exchange='events_exchange',
+            routing_key='asistencias.retardo',
+            message={
+                "alumno_id": req.alumno_id,
+                "materia_id": req.materia_id,
+                "sesion_id": sesion_activa["sesion_id"],
+                "timestamp": datetime.now().isoformat()
+            }
+        )
 
     # 6. Marcar token como usado (anti-replay)
     redis_client.setex(token_key, 600, "usado")
