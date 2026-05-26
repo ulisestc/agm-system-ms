@@ -11,8 +11,9 @@ from schemas import AlumnoResponse, ImportacionResponse, BajaResponse
 from src.services import alumnos_service
 from src.notifications import send_baja_notif
 import models
+from auth_middleware import get_current_user_rpc
 
-router = APIRouter(prefix="/alumnos", tags=["Alumnos"])
+router = APIRouter(prefix="/alumnos", tags=["Alumnos"], dependencies=[Depends(get_current_user_rpc)])
 
 
 @router.post(

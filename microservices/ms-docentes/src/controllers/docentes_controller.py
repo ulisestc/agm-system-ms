@@ -10,8 +10,9 @@ from typing import List
 from database import get_db
 from schemas import DocenteResponse, ImportacionResponse
 from src.services import docentes_service
+from auth_middleware import get_current_user_rpc
 
-router = APIRouter(prefix="/docentes", tags=["Docentes"])
+router = APIRouter(prefix="/docentes", tags=["Docentes"], dependencies=[Depends(get_current_user_rpc)])
 
 
 @router.post(
