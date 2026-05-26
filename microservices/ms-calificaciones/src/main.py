@@ -10,6 +10,7 @@ import os
 from src.database import engine, Base, get_db
 from src import models, schemas
 from src.auth_middleware import get_current_user, require_roles
+from src.rabbitmq_client import validar_propiedad_materia
 
 Base.metadata.create_all(bind=engine)
 
@@ -41,6 +42,14 @@ def crear_actividad(
     db: Session = Depends(get_db),
     user: dict = Depends(require_roles("Docente", "Administrador")),
 ):
+    if user["rol"] == "Docente":
+        es_su_materia = validar_propiedad_materia(str(user["id"]), actividad.materia_id)
+        if not es_su_materia:
+            raise HTTPException(
+                status_code=403,
+                detail="Acceso denegado. No estás asignado a esta materia."
+            )
+
     if actividad.ponderacion <= 0 or actividad.ponderacion > 100:
         raise HTTPException(status_code=400, detail="La ponderación debe estar entre 1 y 100.")
 
@@ -95,6 +104,14 @@ def registrar_calificacion(
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada.")
 
+    if user["rol"] == "Docente":
+        es_su_materia = validar_propiedad_materia(str(user["id"]), str(actividad.materia_id))
+        if not es_su_materia:
+            raise HTTPException(
+                status_code=403,
+                detail="Acceso denegado. No estás asignado a esta materia."
+            )
+
     calificacion_existente = db.query(models.Calificacion).filter_by(
         actividad_id=calif.actividad_id, alumno_id=calif.alumno_id
     ).first()
@@ -125,6 +142,14 @@ async def cargar_calificaciones_excel(
     
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada.")
+
+    if user["rol"] == "Docente":
+        es_su_materia = validar_propiedad_materia(str(user["id"]), str(actividad.materia_id))
+        if not es_su_materia:
+            raise HTTPException(
+                status_code=403,
+                detail="Acceso denegado. No estás asignado a esta materia."
+            )
 
     if not file.filename.endswith(('.xls', '.xlsx')):
         raise HTTPException(status_code=400, detail="El archivo debe ser un Excel (.xlsx)")
@@ -233,6 +258,14 @@ def crear_ponderaciones(
     db: Session = Depends(get_db),
     user: dict = Depends(require_roles("Docente", "Administrador")),
 ):
+    if user["rol"] == "Docente":
+        es_su_materia = validar_propiedad_materia(str(user["id"]), materia_id)
+        if not es_su_materia:
+            raise HTTPException(
+                status_code=403,
+                detail="Acceso denegado. No estás asignado a esta materia."
+            )
+
     if not payload.ponderaciones:
         raise HTTPException(status_code=400, detail="Debe enviar al menos una ponderación.")
 
@@ -296,6 +329,14 @@ def actualizar_ponderacion(
     actividad = db.query(models.Actividad).filter(models.Actividad.id == actividad_id).first()
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada.")
+
+    if user["rol"] == "Docente":
+        es_su_materia = validar_propiedad_materia(str(user["id"]), str(actividad.materia_id))
+        if not es_su_materia:
+            raise HTTPException(
+                status_code=403,
+                detail="Acceso denegado. No estás asignado a esta materia."
+            )
 
     otras_actividades = db.query(models.Actividad).filter(
         models.Actividad.materia_id == actividad.materia_id,
