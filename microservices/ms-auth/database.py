@@ -1,10 +1,13 @@
 import os
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
-# Por ahora pondremos la URL directa aquí para avanzar rápido y probar
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:root@localhost:5432/agm_auth_db"
+SQLALCHEMY_DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:root@localhost:5432/agm_auth_db"
+)
 
 # Creamos el motor que se comunica con Postgres
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

@@ -5,6 +5,7 @@ CREATE DATABASE attendance_db;
 CREATE DATABASE agm_docentes_db;
 CREATE DATABASE agm_periodos_materias_db;
 CREATE DATABASE reports_db;
+CREATE DATABASE agm_calificaciones_db;
 
 -- conectar a base de datos de notificaciones y crear tabla
 \c agm_notificaciones_db;

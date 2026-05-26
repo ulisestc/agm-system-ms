@@ -21,9 +21,11 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "academic",
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -34,6 +36,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+CORS_ALLOW_ALL_ORIGINS = True
 
 TEMPLATES = [
     {
@@ -52,6 +55,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 GRPC_PORT = int(os.getenv("GRPC_PORT", "50052"))
+MS_NOTIFICACIONES_URL = os.getenv("MS_NOTIFICACIONES_URL", "localhost:50056")
 
 USE_SQLITE = "test" in sys.argv or os.getenv("DJANGO_USE_SQLITE", "0") == "1"
 

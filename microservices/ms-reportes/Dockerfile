@@ -13,18 +13,9 @@ COPY microservices/ms-reportes/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY microservices/ms-reportes/ .
-COPY proto/reportes.proto /proto/reportes.proto
-
-RUN python -m grpc_tools.protoc \
-    -I/proto \
-    --python_out=. \
-    --grpc_python_out=. \
-    /proto/reportes.proto
 
 # Puerto REST (FastAPI/uvicorn)
 EXPOSE 8007
-# Puerto gRPC (interno entre microservicios)
-EXPOSE 50057
 
 # Iniciar FastAPI
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8007"]

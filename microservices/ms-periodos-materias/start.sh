@@ -6,5 +6,5 @@ until python -c "import os, psycopg2; psycopg2.connect(host=os.getenv('DB_HOST',
 done
 
 python manage.py migrate --run-syncdb
-python manage.py rungrpc &
+python manage.py runrabbitmq &
 exec python manage.py runserver 0.0.0.0:8000

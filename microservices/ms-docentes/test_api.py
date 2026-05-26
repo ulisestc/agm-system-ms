@@ -1,22 +1,18 @@
 import requests
 import openpyxl
 from io import BytesIO
-
-# Importamos el cliente gRPC para probar la nueva función
 import sys
-sys.path.append("./src")
-from src.grpc_generated import alumnosdocentes_pb2
-import grpc
+import os
 
-MS3_GRPC_HOST = "localhost"
-MS3_GRPC_PORT = "50053"
-
+# Importamos el cliente RabbitMQ RPC para probar la nueva comunicación
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from rabbitmq_manager import RabbitMQRpcClient
 
 BASE_URL = "http://localhost:8003"
 NRC_TEST = "10552"
 
 def main():
-    print("=== Iniciando Pruebas REST y gRPC de MS-3 ===")
+    print("=== Iniciando Pruebas REST y RabbitMQ-RPC de MS-3 ===")
 
     # 1. Verificar si el servidor está vivo
     try:
@@ -58,31 +54,37 @@ def main():
         
     alumno_id = str(alumnos[0]['id'])
     
-    # 5. Probar el nuevo método gRPC: IsAlumnoEnMateria
-    print(f"\n--- Probando gRPC: IsAlumnoEnMateria(alumno_id={alumno_id}, materia_id={NRC_TEST}) ---")
+    # 5. Probar el nuevo método RabbitMQ-RPC: is_alumno_en_materia
+    print(f"\n--- Probando RabbitMQ-RPC: is_alumno_en_materia(alumno_id={alumno_id}, materia_id={NRC_TEST}) ---")
     try:
-        from src.grpc_generated import alumnosdocentes_pb2_grpc
-        channel = grpc.insecure_channel(f"{MS3_GRPC_HOST}:{MS3_GRPC_PORT}")
-        stub = alumnosdocentes_pb2_grpc.DocentesAlumnosServiceStub(channel)
+        # Nota: Usamos localhost porque estamos en el host, no en la red docker
+        rpc_client = RabbitMQRpcClient(url="amqp://guest:guest@localhost:5672")
         
-        req = alumnosdocentes_pb2.AlumnoMateriaRequest(alumnoId=alumno_id, materiaId=NRC_TEST)
-        resp = stub.IsAlumnoEnMateria(req)
-        print(f"Resultado gRPC IsAlumnoEnMateria: {resp.result} (Esperado: True)")
+        resp = rpc_client.call(
+            queue_name='rpc_docentes_queue',
+            action='is_alumno_en_materia',
+            data={"alumnoId": alumno_id, "materiaId": NRC_TEST}
+        )
+        print(f"Resultado RPC is_alumno_en_materia: {resp.get('result')} (Esperado: True)")
     except Exception as e:
-        print(f"Error en gRPC: {e}")
+        print(f"Error en RabbitMQ-RPC: {e}")
 
     # 6. Probar DELETE /alumnos/{id}/baja
     print(f"\n--- Probando Dar de Baja al alumno con ID {alumno_id} ---")
     res = requests.delete(f"{BASE_URL}/alumnos/{alumno_id}/baja")
     print(f"Status: {res.status_code}")
     
-    # Verificar gRPC de nuevo
-    print(f"\n--- Probando gRPC nuevamente tras baja: IsAlumnoEnMateria(alumno_id={alumno_id}, materia_id={NRC_TEST}) ---")
+    # Verificar RPC de nuevo
+    print(f"\n--- Probando RPC nuevamente tras baja: is_alumno_en_materia(alumno_id={alumno_id}, materia_id={NRC_TEST}) ---")
     try:
-        resp = stub.IsAlumnoEnMateria(req)
-        print(f"Resultado gRPC IsAlumnoEnMateria: {resp.result} (Esperado: False)")
+        resp = rpc_client.call(
+            queue_name='rpc_docentes_queue',
+            action='is_alumno_en_materia',
+            data={"alumnoId": alumno_id, "materiaId": NRC_TEST}
+        )
+        print(f"Resultado RPC is_alumno_en_materia: {resp.get('result')} (Esperado: False)")
     except Exception as e:
-        print(f"Error en gRPC: {e}")
+        print(f"Error en RabbitMQ-RPC: {e}")
 
 if __name__ == "__main__":
     main()

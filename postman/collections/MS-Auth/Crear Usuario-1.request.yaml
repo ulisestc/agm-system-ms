@@ -1,0 +1,15 @@
+$kind: http-request
+name: Crear Usuario
+url: "{{base_url_auth}}/usuarios/"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "alumno@buap.mx",
+      "password": "password123",
+      "rol": "ALUMNO"
+    }
+order: 2549

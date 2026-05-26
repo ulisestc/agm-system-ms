@@ -6,11 +6,11 @@ Patrón idéntico a ms-auth para coherencia arquitectónica.
 import threading
 import uvicorn
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base
 from src.controllers.docentes_controller import router as docentes_router
 from src.controllers.alumnos_controller import router as alumnos_router
-import grpc_server
 
 # ── 1. Crear tablas en la BD si no existen ────────────────────────────────────
 Base.metadata.create_all(bind=engine)
@@ -25,6 +25,14 @@ app = FastAPI(
     version="1.0.0",
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # ── 3. Registrar routers ──────────────────────────────────────────────────────
 app.include_router(docentes_router)
 app.include_router(alumnos_router)
@@ -36,16 +44,16 @@ def health_check():
     return {"mensaje": "¡MS-3 Docentes & Alumnos está corriendo!", "version": "1.0.0"}
 
 
-# ── 5. Lanzar gRPC en hilo daemon al iniciar FastAPI ─────────────────────────
+# ── 5. Lanzar RabbitMQ RPC en hilo daemon al iniciar FastAPI ──────────────────
 @app.on_event("startup")
-def start_grpc_server():
+def start_rabbitmq_server():
     """
-    Arranca el servidor gRPC en un hilo separado para que coexista con FastAPI.
-    Se usa daemon=True para que el hilo muera cuando termine el proceso principal.
+    Arranca el servidor RabbitMQ RPC en un hilo separado para que coexista con FastAPI.
     """
-    t = threading.Thread(target=grpc_server.serve, daemon=True)
+    import rabbitmq_server
+    t = threading.Thread(target=rabbitmq_server.serve, daemon=True)
     t.start()
-    print("[Startup] Servidor gRPC iniciado en hilo daemon")
+    print("[Startup] Servidor RabbitMQ-RPC iniciado en hilo daemon")
 
 
 # ── 6. Punto de entrada para ejecución directa ───────────────────────────────

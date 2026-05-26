@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database import engine, Base, get_db
 from auth import get_current_user, require_roles
-import models, schemas
+import models, schemas, rabbitmq_client
 from generadores import (
     generar_excel_calificaciones, generar_pdf_calificaciones,
     generar_excel_asistencias,    generar_pdf_asistencias,
@@ -18,19 +18,18 @@ from generadores import (
 Base.metadata.create_all(bind=engine)
 
 
-def _start_grpc():
+def _start_rabbitmq():
     try:
-        import grpc_server
-        grpc_server.serve()
+        import rabbitmq_server
+        rabbitmq_server.serve()
     except Exception as e:
-        print(f"[WARNING] No se pudo iniciar el servidor gRPC: {e}")
-        print("          Ejecuta generate_grpc.py para generar los stubs.")
+        print(f"[WARNING] No se pudo iniciar el servidor RabbitMQ-RPC: {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    grpc_thread = threading.Thread(target=_start_grpc, daemon=True)
-    grpc_thread.start()
+    rb_thread = threading.Thread(target=_start_rabbitmq, daemon=True)
+    rb_thread.start()
     yield
 
 
@@ -43,16 +42,10 @@ app = FastAPI(
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 
-_cors_origins = [
-    o.strip()
-    for o in os.getenv("CORS_ORIGINS", "http://localhost:4200").split(",")
-    if o.strip()
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
@@ -76,14 +69,33 @@ def reporte_calificaciones(
     materia_id: str,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente")),
+    _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     try:
+        datos = None
+        try:
+            materia_info = rabbitmq_client.get_materia_by_id(int(materia_id))
+            alumnos      = rabbitmq_client.get_alumnos_by_materia(materia_id) or []
+            if materia_info:
+                datos = {
+                    "materia_nombre": materia_info["nombre"],
+                    "materia_nrc":    materia_info["nrc"],
+                    "periodo":        "Período Activo",
+                    "docente":        materia_info["docente_nombre"],
+                    "alumnos": [
+                        {"matricula": a["id"], "nombre": a["nombre"],
+                         "promedio_real": 0, "calificacion_final": 0}
+                        for a in alumnos
+                    ],
+                }
+        except Exception:
+            pass  # Si MS-2 o MS-3 no responden, se usa datos demo
+
         if formato == "xls":
-            file_bytes, filename = generar_excel_calificaciones(materia_id)
+            file_bytes, filename = generar_excel_calificaciones(materia_id, datos)
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         else:
-            file_bytes, filename = generar_pdf_calificaciones(materia_id)
+            file_bytes, filename = generar_pdf_calificaciones(materia_id, datos)
             media_type = "application/pdf"
 
         db.add(models.ReporteGenerado(materia_id=materia_id, tipo="calificaciones", formato=formato))
@@ -108,7 +120,7 @@ def reporte_calificaciones_con_datos(
     body: schemas.DatosCalificacionesReporte,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente")),
+    _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     try:
         datos = body.model_dump()
@@ -150,14 +162,30 @@ def reporte_asistencias(
     materia_id: str,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente")),
+    _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     try:
+        datos = None
+        try:
+            materia_info = rabbitmq_client.get_materia_by_id(int(materia_id))
+            alumnos      = rabbitmq_client.get_alumnos_by_materia(materia_id) or []
+            sesiones     = rabbitmq_client.construir_sesiones_asistencia(alumnos, materia_id)
+            if materia_info:
+                datos = {
+                    "materia_nombre": materia_info["nombre"],
+                    "materia_nrc":    materia_info["nrc"],
+                    "periodo":        "Período Activo",
+                    "docente":        materia_info["docente_nombre"],
+                    "sesiones":       sesiones,
+                }
+        except Exception:
+            pass  # Si MS-2, MS-3 o MS-5 no responden, se usa datos demo
+
         if formato == "xls":
-            file_bytes, filename = generar_excel_asistencias(materia_id)
+            file_bytes, filename = generar_excel_asistencias(materia_id, datos)
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         else:
-            file_bytes, filename = generar_pdf_asistencias(materia_id)
+            file_bytes, filename = generar_pdf_asistencias(materia_id, datos)
             media_type = "application/pdf"
 
         db.add(models.ReporteGenerado(materia_id=materia_id, tipo="asistencias", formato=formato))
@@ -182,7 +210,7 @@ def reporte_asistencias_con_datos(
     body: schemas.DatosAsistenciasReporte,
     formato: str = Query(default="pdf", enum=["pdf", "xls"]),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente")),
+    _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     try:
         datos = body.model_dump()
@@ -225,7 +253,7 @@ def estadisticas_docente(
     page:  int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente")),
+    _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     offset = (page - 1) * limit
     query  = db.query(models.EstadisticaMateria).filter(
@@ -251,7 +279,7 @@ def estadisticas_docente(
 def registrar_estadisticas(
     estadistica: schemas.EstadisticaMateriaCreate,
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin")),
+    _user: dict = Depends(require_roles("Administrador")),
 ):
     nuevo = models.EstadisticaMateria(**estadistica.model_dump())
     db.add(nuevo)
@@ -273,7 +301,7 @@ def estadisticas_alumno(
     page:  int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin", "docente", "alumno")),
+    _user: dict = Depends(require_roles("Administrador", "Docente", "Alumno")),
 ):
     offset = (page - 1) * limit
     query  = db.query(models.EstadisticaAlumno).filter(
@@ -299,7 +327,7 @@ def estadisticas_alumno(
 def registrar_estadisticas_alumno(
     estadistica: schemas.EstadisticaAlumnoCreate,
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin")),
+    _user: dict = Depends(require_roles("Administrador")),
 ):
     nuevo = models.EstadisticaAlumno(**estadistica.model_dump())
     db.add(nuevo)
@@ -319,7 +347,7 @@ def historial_reportes(
     page:  int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_roles("admin")),
+    _user: dict = Depends(require_roles("Administrador")),
 ):
     offset = (page - 1) * limit
     total  = db.query(models.ReporteGenerado).count()
