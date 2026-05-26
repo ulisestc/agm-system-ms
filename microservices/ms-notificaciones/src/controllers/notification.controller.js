@@ -1,6 +1,37 @@
 const emailService = require('../services/email.service');
+const rpcClient = require('../clients/rpc_client');
+const mailer = require('../config/mailer');
 
 class NotificationController {
+    async handleRetardo(data) {
+        try {
+            console.log(`Procesando retardo para alumno ${data.alumno_id} en materia ${data.materia_id}`);
+
+            let destEmail = process.env.ALERT_EMAIL || process.env.MAIL_FROM;
+            let nombreAlumno = `Alumno ID ${data.alumno_id}`;
+
+            const response = await rpcClient.call('rpc_docentes_queue', 'get_alumno', { alumnoId: data.alumno_id });
+
+            if (response && response.success && response.data) {
+                destEmail = response.data.email || destEmail;
+                nombreAlumno = response.data.nombre || nombreAlumno;
+            }
+
+            const mailOptions = {
+                from: process.env.MAIL_FROM,
+                to: destEmail,
+                subject: `Aviso de Retardo - Materia ${data.materia_id}`,
+                text: `Hola ${nombreAlumno},\n\nSe ha registrado un retardo en tu asistencia el día ${data.timestamp}.
+\nSaludos.`
+            };
+
+            await mailer.sendMail(mailOptions);
+            console.log(`Correo de retardo enviado a ${destEmail}`);
+        } catch (error) {
+            console.error("Error al procesar notificación de retardo:", error);
+        }
+    }
+
     async handleBienvenida(data) {
         const { alumnoNombre, alumnoEmail, alumnoId, materiaNombre, claveUnica } = data;
         

@@ -11,7 +11,8 @@ class EventConsumer {
             'auth.reset_password',
             'periodos.materia_cerrada',
             'periodos.bienvenida',
-            'docentes.baja'
+            'docentes.baja',
+            'asistencias.retardo'
         ];
         this.connection = null;
     }
@@ -51,7 +52,7 @@ class EventConsumer {
                     const content = JSON.parse(msg.content.toString());
                     
                     // Middleware de Autenticación
-                    if (routingKey !== 'auth.reset_password') {
+                    if (routingKey !== 'auth.reset_password' && routingKey !== 'asistencias.retardo') {
                         console.log(`[RabbitMQ] Validando token para ${routingKey}...`);
                         const authResult = await authService.validateToken(content.auth_token);
                         
@@ -75,6 +76,9 @@ class EventConsumer {
                             break;
                         case 'auth.reset_password':
                             await notificationController.handleResetPassword(content);
+                            break;
+                        case 'asistencias.retardo':
+                            await notificationController.handleRetardo(content);
                             break;
                         default:
                             console.warn(`[RabbitMQ] Evento desconocido: ${routingKey}`);
