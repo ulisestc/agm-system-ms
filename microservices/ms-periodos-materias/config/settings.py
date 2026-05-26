@@ -85,6 +85,12 @@ else:
     }
 
 REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "academic.authentication.RabbitMQJWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
     "DEFAULT_PAGINATION_CLASS": "academic.pagination.APIPageNumberPagination",
     "PAGE_SIZE": 10,
 }
