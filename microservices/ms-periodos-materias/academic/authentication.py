@@ -1,6 +1,30 @@
+from dataclasses import dataclass
+
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
+
 from academic.auth_client import validate_token
+
+
+@dataclass(frozen=True)
+class AuthenticatedUser:
+    id: int | None
+    email: str | None
+    rol: str | None
+
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    @property
+    def is_anonymous(self) -> bool:
+        return False
+
+    def get(self, key, default=None):
+        return getattr(self, key, default)
+
+    def __getitem__(self, key):
+        return getattr(self, key)
 
 
 class RabbitMQJWTAuthentication(BaseAuthentication):
@@ -29,7 +53,12 @@ class RabbitMQJWTAuthentication(BaseAuthentication):
                 result.get("error_message", "Token inválido o expirado.")
             )
 
-        user = result.get("user")  # {"id": ..., "email": ..., "rol": ...}
+        user_data = result.get("user") or {}
+        user = AuthenticatedUser(
+            id=user_data.get("id"),
+            email=user_data.get("email"),
+            rol=user_data.get("rol"),
+        )
         return (user, token)
 
     def authenticate_header(self, request):
