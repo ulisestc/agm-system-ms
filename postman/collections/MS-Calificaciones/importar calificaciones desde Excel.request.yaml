@@ -1,0 +1,19 @@
+$kind: http-request
+name: Importar Calificaciones desde Excel
+method: POST
+url: '{{base_url_calificaciones}}/calificaciones/importar'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+  - key: Content-Type
+    value: multipart/form-data
+body:
+  type: formdata
+  content:
+    - key: actividad_id
+      type: text
+      value: '{{actividad_id}}'
+    - key: file
+      type: file
+      src: './fixtures/calificaciones.xlsx'

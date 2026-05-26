@@ -2,7 +2,7 @@ import requests
 import uuid
 import sys
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost/api/auth"
 
 def test_auth_full():
     print("====================================================")

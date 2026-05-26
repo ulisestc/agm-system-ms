@@ -1,0 +1,8 @@
+$kind: http-request
+name: Promedio Ponderado Alumno
+method: GET
+url: '{{base_url_calificaciones}}/calificaciones/{{materia_id}}/{{alumno_id}}/promedio'
+order: 6000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

@@ -1,0 +1,20 @@
+$kind: http-request
+name: Importar Materias desde PDF
+method: POST
+url: '{{base_url_periodos}}/api/materias/importar/'
+order: 1600
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+body:
+  type: formdata
+  content:
+    - key: archivo
+      type: file
+      src: './fixtures/materias.pdf'
+    - key: periodo_id
+      type: text
+      value: '{{periodo_id}}'
+    - key: docente_id_default
+      type: text
+      value: '{{docente_id}}'

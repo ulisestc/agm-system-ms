@@ -3,3 +3,6 @@ name: Consultar Materia por ID
 method: GET
 url: '{{base_url_periodos}}/api/materias/1/'
 order: 2200
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

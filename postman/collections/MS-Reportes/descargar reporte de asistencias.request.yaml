@@ -9,3 +9,6 @@ queryParams:
 pathVariables:
   - key: materia_id
     value: '{{materia_id}}'
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

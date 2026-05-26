@@ -3,3 +3,6 @@ name: Listar Docentes
 method: GET
 url: '{{base_url_docentes}}/docentes/'
 order: 1200
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

@@ -1,12 +1,21 @@
 from django.core.exceptions import ValidationError
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import Periodo, Materia
+from .authentication import AuthenticatedUser
 
+# Mock global de RabbitMQ para evitar errores de conexión al importar
+with patch("rabbitmq_manager.RabbitMQManager._connect", return_value=None), \
+     patch("rabbitmq_manager.RabbitMQRpcClient._connect", return_value=None):
+    from .models import Periodo, Materia
 
 class PeriodoAPITests(APITestCase):
+    def setUp(self):
+        self.client.force_authenticate(
+            user=AuthenticatedUser(id=1, email="admin@agm.buap.mx", rol="Administrador")
+        )
+
     def test_create_periodo_and_retrieve_active(self):
         response = self.client.post(
             "/api/periodos/",
@@ -65,6 +74,9 @@ class MateriaAPITests(APITestCase):
             plan_estudios="ISC 2026",
             activo=True,
         )
+        self.client.force_authenticate(
+            user=AuthenticatedUser(id=1, email="admin@agm.buap.mx", rol="Administrador")
+        )
 
     def test_create_and_list_materia(self):
         response = self.client.post(
@@ -106,7 +118,7 @@ class MateriaAPITests(APITestCase):
         self.assertEqual(response.data["data"][0]["nrc"], "54321")
 
     @patch("academic.views.send_cierre_materia", return_value=True)
-    def test_close_materia_triggers_notificacion_grpc(self, mocked_send):
+    def test_close_materia_triggers_notificacion_event(self, mocked_send):
         materia = Materia.objects.create(
             nrc="67890",
             nombre="Redes",
@@ -124,4 +136,30 @@ class MateriaAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["success"])
         self.assertFalse(Materia.objects.get(id=materia.id).activo)
-        mocked_send.assert_called_once_with(materia.id)
+        mocked_send.assert_called_once_with(
+            materia_id=materia.id,
+            materia_nombre=materia.nombre,
+            nrc=materia.nrc,
+            auth_token="no-token",
+        )
+
+    def test_import_materias_from_text(self):
+        response = self.client.post(
+            "/api/materias/importar/",
+            {
+                "periodo_id": self.periodo.id,
+                "docente_id_default": 15,
+                "texto": (
+                    "12345  Servicios Web  001  10 Dra. Lopez  Lunes 10:00-12:00\n"
+                    "23456  Arquitectura de Software  002  11 Ing. Ruiz  Martes 12:00-14:00"
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["data"]["created"], 2)
+        self.assertEqual(Materia.objects.filter(periodo_id=self.periodo.id).count(), 2)
+        self.assertEqual(Materia.objects.get(nrc="12345").docente_id, 10)
+        self.assertEqual(Materia.objects.get(nrc="12345").docente_nombre, "Dra. Lopez")

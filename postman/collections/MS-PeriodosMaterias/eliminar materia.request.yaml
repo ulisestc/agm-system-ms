@@ -3,3 +3,6 @@ name: Eliminar Materia
 method: DELETE
 url: '{{base_url_periodos}}/api/materias/1/'
 order: 2400
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

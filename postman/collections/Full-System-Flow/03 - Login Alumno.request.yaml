@@ -1,0 +1,17 @@
+$kind: http-request
+name: 03 - Login Alumno
+method: POST
+url: '{{base_url_auth}}/auth/login'
+order: 300
+headers:
+  - key: Content-Type
+    value: application/x-www-form-urlencoded
+body:
+  type: urlencoded
+  content:
+    - key: username
+      value: '{{alumno_email}}'
+    - key: password
+      value: '{{password}}'
+    - key: grant_type
+      value: password

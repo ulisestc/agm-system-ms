@@ -11,30 +11,25 @@ from fastapi import HTTPException
 import models
 
 
-def importar_alumnos_desde_excel(contenido: bytes, nrc: str, db: Session) -> int:
+def importar_alumnos_desde_excel(contenido: bytes, nrc: str, db: Session) -> List[models.Alumno]:
     """
     Lee un archivo Excel con la lista de alumnos inscritos en un NRC.
-    Columnas esperadas (A-D):
-      Matrícula | Nombre | Email | NRC  (el NRC también puede tomarse del parámetro)
-
-    Estrategia: upsert por (matricula, nrc) para tolerar reimportaciones.
-
+    ...
     Returns:
-        Número de alumnos nuevos importados.
+        Lista de nuevos objetos Alumno creados.
     """
     wb = openpyxl.load_workbook(BytesIO(contenido), read_only=True, data_only=True)
     ws = wb.active
 
-    registros_importados = 0
+    alumnos_nuevos = []
     primera_fila = True
 
     for fila in ws.iter_rows(values_only=True):
-        # Saltar encabezado
         if primera_fila:
             primera_fila = False
             continue
 
-        if not fila[0]:          # matrícula vacía → fila inválida
+        if not fila[0]:
             continue
 
         matricula = str(fila[0]).strip()
@@ -59,14 +54,16 @@ def importar_alumnos_desde_excel(contenido: bytes, nrc: str, db: Session) -> int
                 activo=True,
             )
             db.add(alumno)
-            registros_importados += 1
+            alumnos_nuevos.append(alumno)
         else:
-            # Re-activar si estaba dado de baja (reimportación)
             alumno.nombre = nombre
             alumno.activo = True
 
     db.commit()
-    return registros_importados
+    for a in alumnos_nuevos:
+        db.refresh(a)
+    return alumnos_nuevos
+
 
 
 def listar_alumnos_por_materia(nrc: str, db: Session) -> List[models.Alumno]:

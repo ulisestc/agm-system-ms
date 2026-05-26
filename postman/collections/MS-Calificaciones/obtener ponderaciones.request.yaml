@@ -1,0 +1,8 @@
+$kind: http-request
+name: Obtener Ponderaciones
+method: GET
+url: '{{base_url_calificaciones}}/ponderaciones/{{materia_id}}'
+order: 7000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

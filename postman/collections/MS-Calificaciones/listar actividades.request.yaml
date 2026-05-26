@@ -1,0 +1,8 @@
+$kind: http-request
+name: Listar Actividades
+method: GET
+url: '{{base_url_calificaciones}}/actividades/{{materia_id}}'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

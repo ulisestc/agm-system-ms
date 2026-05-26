@@ -1,0 +1,17 @@
+$kind: http-request
+name: 02 - Iniciar Sesión de Asistencia
+method: POST
+url: '{{base_url_asistencias}}/sesiones/iniciar'
+order: 200
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "materia_id": "{{materia_id}}",
+      "docente_id": "{{docente_id}}"
+    }

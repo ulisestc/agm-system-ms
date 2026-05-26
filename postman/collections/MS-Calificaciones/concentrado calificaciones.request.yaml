@@ -1,0 +1,8 @@
+$kind: http-request
+name: Concentrado de Calificaciones
+method: GET
+url: '{{base_url_calificaciones}}/concentrado/{{materia_id}}'
+order: 10000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

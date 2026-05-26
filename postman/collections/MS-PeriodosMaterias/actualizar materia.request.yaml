@@ -4,6 +4,8 @@ method: PUT
 url: '{{base_url_periodos}}/api/materias/1/'
 order: 2300
 headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
   - key: Content-Type
     value: application/json
 body:

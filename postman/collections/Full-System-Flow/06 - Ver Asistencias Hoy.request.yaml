@@ -1,0 +1,8 @@
+$kind: http-request
+name: 06 - Ver Asistencias Hoy
+method: GET
+url: '{{base_url_asistencias}}/asistencias/{{materia_id}}/hoy'
+order: 600
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

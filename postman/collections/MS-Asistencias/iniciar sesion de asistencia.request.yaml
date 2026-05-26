@@ -4,6 +4,8 @@ method: POST
 url: '{{base_url_asistencias}}/sesiones/iniciar'
 order: 2000
 headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
   - key: Content-Type
     value: application/json
 body:

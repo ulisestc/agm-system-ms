@@ -1,0 +1,17 @@
+$kind: http-request
+name: 04 - Generar Token QR
+method: POST
+url: '{{base_url_asistencias}}/qr/generar'
+order: 400
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "alumno_id": "{{alumno_id}}",
+      "materia_id": "{{materia_id}}"
+    }

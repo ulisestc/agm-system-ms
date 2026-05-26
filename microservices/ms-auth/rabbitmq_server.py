@@ -1,10 +1,13 @@
 import logging
 import jwt
+import sys
 from rabbitmq_manager import RabbitMQRpcServer
 import models
 from database import SessionLocal
 from settings import ALGORITHM, SECRET_KEY
 
+# Asegurar que los logs salgan a stdout
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 logger = logging.getLogger("[RabbitMQ-RPC ms-auth]")
 
 def _rol_to_string(rol) -> str:
@@ -42,25 +45,30 @@ class AuthRpcHandlers:
             return usuario, ""
         except jwt.ExpiredSignatureError:
             return None, "Token expirado"
-        except (jwt.InvalidTokenError, ValueError):
-            return None, "Token invalido"
+        except (jwt.InvalidTokenError, ValueError) as e:
+            return None, f"Token invalido: {str(e)}"
 
     def validate_token(self, data):
         token = data.get("token")
+        print(f"--> [RPC] Validando token: {token[:20]}...", flush=True)
         db = SessionLocal()
         try:
             usuario, error = self._get_user_from_token(token, db)
+            
             if usuario is None:
+                print(f"--> [RPC] Validacion fallida: {error}", flush=True)
                 return {
                     "valid": False,
                     "error_message": error,
                 }
 
+            print(f"--> [RPC] Validacion exitosa: {usuario.email}", flush=True)
             return {
                 "valid": True,
                 "user": _to_user_dict(usuario),
                 "error_message": "",
             }
+
         finally:
             db.close()
 
@@ -121,6 +129,7 @@ def serve():
     server.register_action('validate_token', handlers.validate_token)
     server.register_action('get_user_by_id', handlers.get_user_by_id)
     server.register_action('check_role', handlers.check_role)
+    print("--> [RPC] Servidor Auth iniciado en rpc_auth_queue", flush=True)
     server.start()
 
 if __name__ == "__main__":

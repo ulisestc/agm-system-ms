@@ -3,3 +3,6 @@ name: Consultar Periodo por ID
 method: GET
 url: '{{base_url_periodos}}/api/periodos/1/'
 order: 1500
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

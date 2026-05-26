@@ -3,3 +3,6 @@ name: Obtener Periodo Activo
 method: GET
 url: '{{base_url_periodos}}/api/periodos/activo/'
 order: 1300
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

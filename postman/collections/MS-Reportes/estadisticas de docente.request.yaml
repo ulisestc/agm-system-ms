@@ -6,3 +6,6 @@ order: 6000
 pathVariables:
   - key: docente_id
     value: '{{docente_id}}'
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

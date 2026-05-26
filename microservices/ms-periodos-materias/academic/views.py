@@ -3,15 +3,36 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .notifications import send_cierre_materia
+from .importers import import_materias_from_pdf, import_materias_from_text
 from .models import Periodo, Materia
 from .pagination import APIPageNumberPagination
-from .serializers import PeriodoSerializer, MateriaSerializer
+from .serializers import PeriodoSerializer, MateriaSerializer, MateriaImportSerializer
+from rest_framework.permissions import IsAuthenticated, BasePermission
+
+
+def _user_role(user):
+    if not user:
+        return None
+    if hasattr(user, "get"):
+        return user.get("rol")
+    return getattr(user, "rol", None)
+
+
+class IsDocente(BasePermission):
+    """Permite acceso solo a usuarios con rol Docente o Administrador."""
+    def has_permission(self, request, view):
+        return _user_role(request.user) in {"Docente", "Administrador"}
+
+class IsAdminOrDocente(BasePermission):
+    def has_permission(self, request, view):
+        return _user_role(request.user) in {"Administrador", "Docente"}
 
 
 class PeriodoViewSet(viewsets.ModelViewSet):
     queryset = Periodo.objects.all()
     serializer_class = PeriodoSerializer
     pagination_class = APIPageNumberPagination
+    permission_classes = [IsAuthenticated, IsAdminOrDocente]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -77,6 +98,7 @@ class MateriaViewSet(viewsets.ModelViewSet):
     queryset = Materia.objects.all()
     serializer_class = MateriaSerializer
     pagination_class = APIPageNumberPagination
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -134,16 +156,61 @@ class MateriaViewSet(viewsets.ModelViewSet):
         instance.delete()
         return self._success(None, "Materia eliminada correctamente.")
 
-    @action(detail=True, methods=["post"], url_path="cerrar")
+    @action(detail=False, methods=["post"], url_path="importar", permission_classes=[IsAuthenticated, IsAdminOrDocente])
+    def importar(self, request):
+        serializer = MateriaImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        periodo_id = serializer.validated_data["periodo_id"]
+        docente_id_default = serializer.validated_data.get("docente_id_default")
+        archivo = serializer.validated_data.get("archivo")
+        texto = serializer.validated_data.get("texto", "").strip()
+
+        try:
+            if archivo is not None:
+                result = import_materias_from_pdf(
+                    archivo,
+                    periodo_id=periodo_id,
+                    docente_id_default=docente_id_default,
+                )
+            else:
+                result = import_materias_from_text(
+                    texto,
+                    periodo_id=periodo_id,
+                    docente_id_default=docente_id_default,
+                )
+        except ValueError as exc:
+            return self._error(str(exc), status.HTTP_400_BAD_REQUEST)
+
+        return self._success(
+            {
+                "periodo_id": periodo_id,
+                **result,
+            },
+            "Importación de materias completada correctamente.",
+            status.HTTP_201_CREATED if result["created"] else status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="cerrar",
+        permission_classes=[IsAuthenticated, IsAdminOrDocente])
     def cerrar(self, request, pk=None):
         materia = self.get_object()
         materia.activo = False
         materia.save()
 
+        # Extraer token de autorización
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header.replace('Bearer ', '') if auth_header else 'no-token'
+
         try:
-            notified = send_cierre_materia(materia.id)
-        except grpc.RpcError as exc:
-            return self._error(f"No se pudo notificar el cierre de la materia: {exc.details()}", status.HTTP_502_BAD_GATEWAY)
+            notified = send_cierre_materia(
+                materia_id=materia.id,
+                materia_nombre=materia.nombre,
+                nrc=materia.nrc,
+                auth_token=token
+            )
+        except Exception as exc:
+            return self._error(f"No se pudo notificar el cierre de la materia: {str(exc)}", status.HTTP_502_BAD_GATEWAY)
 
         if not notified:
             return self._error("El servicio de notificaciones rechazó el cierre de la materia.", status.HTTP_502_BAD_GATEWAY)
@@ -152,6 +219,7 @@ class MateriaViewSet(viewsets.ModelViewSet):
             self.get_serializer(materia).data,
             "Materia cerrada y notificación enviada correctamente.",
         )
+
 
     @action(detail=False, methods=["get"], url_path="por-periodo/(?P<periodo_id>[^/.]+)")
     def por_periodo(self, request, periodo_id=None):

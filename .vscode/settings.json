@@ -1,0 +1,13 @@
+{
+  "python.analysis.extraPaths": [
+    "./microservices/ms-docentes",
+    "./microservices/ms-auth",
+    "./microservices/ms-calificaciones",
+    "./microservices/ms-asistencias",
+    "./microservices/ms-reportes",
+    "./microservices/ms-periodos-materias",
+    "./microservices/ms-materias",
+    "./microservices/ms-notificaciones",
+    "./microservices/ms-periodos"
+  ]
+}

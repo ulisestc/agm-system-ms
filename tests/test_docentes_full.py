@@ -1,12 +1,22 @@
 import requests
 import sys
+import os
 
-BASE_URL = "http://localhost:8003"
+# Añadir el directorio actual al path para importar el helper
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from auth_helper import get_auth_headers
+
+BASE_URL = "http://localhost/api/docentes"
 
 def test_docentes_full():
     print("====================================================")
     print("   TESTING MS-DOCENTES (Gestión de Personal)        ")
     print("====================================================\n")
+
+    headers = get_auth_headers()
+    if not headers:
+        print("FAILED: No se pudo obtener token de autenticación")
+        return
 
     # 1. Health Check
     print("[1] Verificando estado del servicio...", end=" ")
@@ -19,16 +29,16 @@ def test_docentes_full():
 
     # 2. Listar Docentes
     print("[2] Listando directorio docente...", end=" ")
-    res = requests.get(f"{BASE_URL}/docentes/")
+    res = requests.get(f"{BASE_URL}/docentes/", headers=headers)
     if res.status_code == 200:
         print(f"OK ({len(res.json())} docentes encontrados)")
     else:
         print(f"FAILED ({res.status_code})")
 
     # 3. Listar Alumnos de una materia (usando una que exista o la de prueba)
-    nrc_test = "TEST-123"
+    nrc_test = "25303"
     print(f"[3] Listando alumnos de materia {nrc_test}...", end=" ")
-    res = requests.get(f"{BASE_URL}/alumnos/materia/{nrc_test}")
+    res = requests.get(f"{BASE_URL}/alumnos/materia/{nrc_test}", headers=headers)
     if res.status_code == 200:
         alumnos = res.json()
         print(f"OK ({len(alumnos)} alumnos encontrados)")

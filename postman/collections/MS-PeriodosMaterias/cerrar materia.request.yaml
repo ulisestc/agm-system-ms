@@ -1,0 +1,8 @@
+$kind: http-request
+name: Cerrar Materia
+method: POST
+url: '{{base_url_periodos}}/api/materias/{{materia_id}}/cerrar/'
+order: 1700
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
