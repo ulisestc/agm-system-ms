@@ -9,6 +9,7 @@ import os
 
 from src.database import engine, Base, get_db
 from src import models, schemas
+from src.auth_middleware import get_current_user, require_roles
 
 Base.metadata.create_all(bind=engine)
 
@@ -35,7 +36,11 @@ def health_check():
     }
 
 @app.post("/actividades", summary="Crear una nueva actividad evaluativa")
-def crear_actividad(actividad: schemas.ActividadCreate, db: Session = Depends(get_db)):
+def crear_actividad(
+    actividad: schemas.ActividadCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     if actividad.ponderacion <= 0 or actividad.ponderacion > 100:
         raise HTTPException(status_code=400, detail="La ponderación debe estar entre 1 y 100.")
 
@@ -62,7 +67,11 @@ def crear_actividad(actividad: schemas.ActividadCreate, db: Session = Depends(ge
     }
 
 @app.get("/actividades/{materia_id}", summary="Listar actividades de una materia")
-def listar_actividades(materia_id: str, db: Session = Depends(get_db)):
+def listar_actividades(
+    materia_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == materia_id).all()
     total_ponderacion = sum(act.ponderacion for act in actividades)
 
@@ -77,7 +86,11 @@ def listar_actividades(materia_id: str, db: Session = Depends(get_db)):
     }
 
 @app.post("/calificaciones", summary="Registrar calificación individual")
-def registrar_calificacion(calif: schemas.CalificacionCreate, db: Session = Depends(get_db)):
+def registrar_calificacion(
+    calif: schemas.CalificacionCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     actividad = db.query(models.Actividad).filter(models.Actividad.id == calif.actividad_id).first()
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada.")
@@ -104,7 +117,8 @@ def registrar_calificacion(calif: schemas.CalificacionCreate, db: Session = Depe
 async def cargar_calificaciones_excel(
     actividad_id: str = Form(...),
     file: UploadFile = File(...), 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
 ):
     actividad_id = actividad_id.strip()
     actividad = db.query(models.Actividad).filter(models.Actividad.id == actividad_id).first()
@@ -155,7 +169,12 @@ async def cargar_calificaciones_excel(
     }
 
 @app.get("/calificaciones/{materia_id}/{alumno_id}/promedio", summary="Calcular promedio ponderado final")
-def calcular_promedio_final(materia_id: str, alumno_id: str, db: Session = Depends(get_db)):
+def calcular_promedio_final(
+    materia_id: str,
+    alumno_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     materia_id = materia_id.strip()
     alumno_id = alumno_id.strip()
     
@@ -197,14 +216,23 @@ def calcular_promedio_final(materia_id: str, alumno_id: str, db: Session = Depen
     }
 
 @app.get("/ponderaciones/{materia_id}", summary="Obtener ponderaciones de una materia")
-def obtener_ponderaciones(materia_id: str, db: Session = Depends(get_db)):
+def obtener_ponderaciones(
+    materia_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == materia_id).all()
     total = sum(act.ponderacion for act in actividades)
     return {"success": True, "data": {"materia_id": materia_id, "total_ponderacion": total, "detalles": actividades}}
 
 
 @app.post("/ponderaciones/{materia_id}", summary="Configurar ponderaciones de una materia")
-def crear_ponderaciones(materia_id: str, payload: schemas.PonderacionesCreate, db: Session = Depends(get_db)):
+def crear_ponderaciones(
+    materia_id: str,
+    payload: schemas.PonderacionesCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     if not payload.ponderaciones:
         raise HTTPException(status_code=400, detail="Debe enviar al menos una ponderación.")
 
@@ -256,7 +284,12 @@ def crear_ponderaciones(materia_id: str, payload: schemas.PonderacionesCreate, d
     }
 
 @app.put("/ponderaciones/{actividad_id}", summary="Actualizar ponderación de una actividad")
-def actualizar_ponderacion(actividad_id: str, nueva_ponderacion: float, db: Session = Depends(get_db)):
+def actualizar_ponderacion(
+    actividad_id: str,
+    nueva_ponderacion: float,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     if nueva_ponderacion <= 0 or nueva_ponderacion > 100:
         raise HTTPException(status_code=400, detail="Ponderación inválida.")
         
@@ -281,7 +314,11 @@ def actualizar_ponderacion(actividad_id: str, nueva_ponderacion: float, db: Sess
     return {"success": True, "message": "Ponderación actualizada."}
 
 @app.get("/concentrado/{materia_id}", summary="Obtener el concentrado final de calificaciones")
-def obtener_concentrado(materia_id: str, db: Session = Depends(get_db)):
+def obtener_concentrado(
+    materia_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == materia_id).all()
     if not actividades:
         raise HTTPException(status_code=404, detail="Sin actividades en esta materia.")
