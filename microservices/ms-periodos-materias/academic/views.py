@@ -6,12 +6,29 @@ from .notifications import send_cierre_materia
 from .models import Periodo, Materia
 from .pagination import APIPageNumberPagination
 from .serializers import PeriodoSerializer, MateriaSerializer
+from rest_framework.permissions import IsAuthenticated, BasePermission
+
+class IsDocente(BasePermission):
+    """Permite acceso solo a usuarios con rol Docente o Administrador."""
+    def has_permission(self, request, view):
+        user = request.user  # el dict que devuelve nuestro authenticate()
+        if not user:
+            return False
+        return user.get("rol") in {"Docente", "Administrador"}
+
+class IsAdminOrDocente(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user:
+            return False
+        return user.get("rol") in {"Administrador", "Docente"}
 
 
 class PeriodoViewSet(viewsets.ModelViewSet):
     queryset = Periodo.objects.all()
     serializer_class = PeriodoSerializer
     pagination_class = APIPageNumberPagination
+    permission_classes = [IsAuthenticated, IsAdminOrDocente]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -77,6 +94,7 @@ class MateriaViewSet(viewsets.ModelViewSet):
     queryset = Materia.objects.all()
     serializer_class = MateriaSerializer
     pagination_class = APIPageNumberPagination
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -134,7 +152,8 @@ class MateriaViewSet(viewsets.ModelViewSet):
         instance.delete()
         return self._success(None, "Materia eliminada correctamente.")
 
-    @action(detail=True, methods=["post"], url_path="cerrar")
+    @action(detail=True, methods=["post"], url_path="cerrar",
+        permission_classes=[IsAuthenticated, IsAdminOrDocente])
     def cerrar(self, request, pk=None):
         materia = self.get_object()
         materia.activo = False
