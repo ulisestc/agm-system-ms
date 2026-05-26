@@ -140,10 +140,19 @@ class MateriaViewSet(viewsets.ModelViewSet):
         materia.activo = False
         materia.save()
 
+        # Extraer token de autorización
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header.replace('Bearer ', '') if auth_header else 'no-token'
+
         try:
-            notified = send_cierre_materia(materia.id)
-        except grpc.RpcError as exc:
-            return self._error(f"No se pudo notificar el cierre de la materia: {exc.details()}", status.HTTP_502_BAD_GATEWAY)
+            notified = send_cierre_materia(
+                materia_id=materia.id,
+                materia_nombre=materia.nombre,
+                nrc=materia.nrc,
+                auth_token=token
+            )
+        except Exception as exc:
+            return self._error(f"No se pudo notificar el cierre de la materia: {str(exc)}", status.HTTP_502_BAD_GATEWAY)
 
         if not notified:
             return self._error("El servicio de notificaciones rechazó el cierre de la materia.", status.HTTP_502_BAD_GATEWAY)
@@ -152,6 +161,7 @@ class MateriaViewSet(viewsets.ModelViewSet):
             self.get_serializer(materia).data,
             "Materia cerrada y notificación enviada correctamente.",
         )
+
 
     @action(detail=False, methods=["get"], url_path="por-periodo/(?P<periodo_id>[^/.]+)")
     def por_periodo(self, request, periodo_id=None):
