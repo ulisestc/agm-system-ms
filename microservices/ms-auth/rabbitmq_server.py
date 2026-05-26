@@ -50,16 +50,20 @@ class AuthRpcHandlers:
         db = SessionLocal()
         try:
             usuario, error = self._get_user_from_token(token, db)
+            
             if usuario is None:
                 return {
-                    "valid": False,
+                    "status": "error",
                     "error_message": error,
                 }
 
             return {
-                "valid": True,
-                "user": _to_user_dict(usuario),
-                "error_message": "",
+                "status": "success",
+                "user_data": {
+                    "user_id": usuario.id,
+                    "email": usuario.email,
+                    "rol": _rol_to_string(usuario.rol),
+                }
             }
         finally:
             db.close()
