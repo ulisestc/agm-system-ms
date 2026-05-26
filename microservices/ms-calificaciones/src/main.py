@@ -81,6 +81,16 @@ def listar_actividades(
     db: Session = Depends(get_db),
     user: dict = Depends(require_roles("Docente", "Administrador")),
 ):
+    # --- Candado Anti-IDOR para lectura ---
+    if user["rol"] == "Docente":
+        es_su_materia = validar_propiedad_materia(str(user["id"]), materia_id)
+        if not es_su_materia:
+            raise HTTPException(
+                status_code=403,
+                detail="Acceso denegado. No puedes ver la información de una materia ajena."
+            )
+    # --------------------------------------
+
     actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == materia_id).all()
     total_ponderacion = sum(act.ponderacion for act in actividades)
 

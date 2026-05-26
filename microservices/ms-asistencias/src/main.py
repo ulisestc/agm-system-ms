@@ -208,6 +208,9 @@ def registrar_asistencia(
     # 6. Marcar token como usado (anti-replay)
     redis_client.setex(token_key, 600, "usado")
 
+    # 7. Limpieza: Borrar el token original para liberar memoria de Redis
+    redis_client.delete(f"qr_token:{req.token_qr}")
+
     return {
         "success": True,
         "data": {"estado": estado},
