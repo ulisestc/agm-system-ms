@@ -3,3 +3,6 @@ name: Activar Periodo
 method: POST
 url: '{{base_url_periodos}}/api/periodos/1/activar/'
 order: 1400
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

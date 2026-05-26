@@ -3,3 +3,6 @@ name: Listar Materias
 method: GET
 url: '{{base_url_periodos}}/api/materias/'
 order: 1900
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

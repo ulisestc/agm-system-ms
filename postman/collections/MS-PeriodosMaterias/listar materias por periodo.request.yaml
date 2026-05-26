@@ -3,3 +3,6 @@ name: Listar Materias por Periodo
 method: GET
 url: '{{base_url_periodos}}/api/materias/?periodo_id=1'
 order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

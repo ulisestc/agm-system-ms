@@ -1,13 +1,23 @@
 import requests
 import uuid
 import sys
+import os
 
-BASE_URL = "http://localhost:8001/api"
+# Añadir el directorio actual al path para importar el helper
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from auth_helper import get_auth_headers
+
+BASE_URL = "http://localhost/api/periodos/api"
 
 def test_periodos_materias_full():
     print("====================================================")
     print("   TESTING MS-PERIODOS-MATERIAS (CRUD Académico)    ")
     print("====================================================\n")
+
+    headers = get_auth_headers()
+    if not headers:
+        print("FAILED: No se pudo obtener token de autenticación")
+        return
 
     # 1. Crear Periodo
     print("[1] Creando periodo...", end=" ")
@@ -19,7 +29,7 @@ def test_periodos_materias_full():
         "plan_estudios": "ISC 2026",
         "activo": False
     }
-    res = requests.post(f"{BASE_URL}/periodos/", json=periodo_payload)
+    res = requests.post(f"{BASE_URL}/periodos/", json=periodo_payload, headers=headers)
     if res.status_code == 201:
         periodo_id = res.json()["data"]["id"]
         print(f"OK (ID: {periodo_id})")
@@ -30,7 +40,7 @@ def test_periodos_materias_full():
 
     # 2. Activar Periodo
     print(f"[2] Activando periodo {periodo_id}...", end=" ")
-    res = requests.post(f"{BASE_URL}/periodos/{periodo_id}/activar/")
+    res = requests.post(f"{BASE_URL}/periodos/{periodo_id}/activar/", headers=headers)
     if res.status_code == 200:
         print("OK")
     else:
@@ -38,7 +48,7 @@ def test_periodos_materias_full():
 
     # 3. Consultar Periodo Activo
     print("[3] Consultando periodo activo...", end=" ")
-    res = requests.get(f"{BASE_URL}/periodos/activo/")
+    res = requests.get(f"{BASE_URL}/periodos/activo/", headers=headers)
     if res.status_code == 200:
         print(f"OK (Nombre: {res.json()['data']['nombre']})")
     else:
@@ -58,7 +68,7 @@ def test_periodos_materias_full():
         "periodo_id": periodo_id,
         "activo": True
     }
-    res = requests.post(f"{BASE_URL}/materias/", json=materia_payload)
+    res = requests.post(f"{BASE_URL}/materias/", json=materia_payload, headers=headers)
     if res.status_code == 201:
         materia_id = res.json()["data"]["id"]
         print(f"OK (NRC: {nrc})")
@@ -67,7 +77,7 @@ def test_periodos_materias_full():
 
     # 5. Listar materias por periodo
     print(f"[5] Listando materias del periodo {periodo_id}...", end=" ")
-    res = requests.get(f"{BASE_URL}/materias/por-periodo/{periodo_id}/")
+    res = requests.get(f"{BASE_URL}/materias/por-periodo/{periodo_id}/", headers=headers)
     if res.status_code == 200:
         print(f"OK (Total: {len(res.json()['data'])})")
     else:
@@ -75,7 +85,7 @@ def test_periodos_materias_full():
 
     # 6. Actualizar Materia
     print(f"[6] Actualizando sección de la materia {materia_id}...", end=" ")
-    res = requests.patch(f"{BASE_URL}/materias/{materia_id}/", json={"seccion": "003"})
+    res = requests.patch(f"{BASE_URL}/materias/{materia_id}/", json={"seccion": "003"}, headers=headers)
     if res.status_code == 200:
         print("OK (Nueva sección: 003)")
     else:
@@ -83,7 +93,7 @@ def test_periodos_materias_full():
 
     # 7. Eliminar Materia (Limpieza opcional)
     print(f"[7] Eliminando materia de prueba {materia_id}...", end=" ")
-    res = requests.delete(f"{BASE_URL}/materias/{materia_id}/")
+    res = requests.delete(f"{BASE_URL}/materias/{materia_id}/", headers=headers)
     if res.status_code == 200:
         print("OK")
     else:

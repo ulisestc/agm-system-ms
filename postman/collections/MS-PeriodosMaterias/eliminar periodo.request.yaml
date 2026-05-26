@@ -3,3 +3,6 @@ name: Eliminar Periodo
 method: DELETE
 url: '{{base_url_periodos}}/api/periodos/1/'
 order: 1700
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

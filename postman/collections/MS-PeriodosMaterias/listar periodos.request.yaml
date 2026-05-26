@@ -3,3 +3,6 @@ name: Listar Periodos
 method: GET
 url: '{{base_url_periodos}}/api/periodos/?page=1&limit=10'
 order: 1200
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

@@ -3,3 +3,6 @@ name: Listar Materias con Nombre de Periodo
 method: GET
 url: '{{base_url_periodos}}/api/materias/con-periodo/'
 order: 2100
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
