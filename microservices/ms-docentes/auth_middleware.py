@@ -8,7 +8,7 @@ if current_dir not in sys.path:
 
 from fastapi import Security, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from rabbitmq_manager import RabbitMQManager
+from rabbitmq_manager import RabbitMQRpcClient
 
 
 security = HTTPBearer()
@@ -19,13 +19,22 @@ def get_current_user_rpc(credentials: HTTPAuthorizationCredentials = Security(se
     """
     token = credentials.credentials
     try:
-        rmq_client = RabbitMQManager()
+        rpc_client = RabbitMQRpcClient()
         # Llamada RPC síncrona por software, asíncrona por red
-        response = rmq_client.call_auth(action='validate_token', data={'token': token})
+        response = rpc_client.call(
+            queue_name='rpc_auth_queue',
+            action='validate_token',
+            data={'token': token}
+        )
 
-        if response and response.get('status') == 'success':
+        if response and response.get('valid') is True:
+            user = response.get('user', {})
             # Retorna el diccionario con {'user_id': 1, 'rol': 'docente', ...}
-            return response.get('user_data')
+            return {
+                'user_id': user.get('id'),
+                'rol': user.get('rol'),
+                'email': user.get('email')
+            }
         else:
             raise HTTPException(status_code=401, detail="Token inválido o expirado")
             
