@@ -1,6 +1,6 @@
 """
 main.py – Punto de entrada del MS-3: Docentes & Alumnos
-Arranca FastAPI (REST) y lanza el servidor gRPC en un hilo daemon separado.
+Arranca FastAPI (REST) y lanza el servidor RabbitMQ RPC en un hilo daemon separado.
 Patrón idéntico a ms-auth para coherencia arquitectónica.
 """
 import threading

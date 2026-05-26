@@ -1,11 +1,14 @@
 from django.core.exceptions import ValidationError
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from .authentication import AuthenticatedUser
-from .models import Periodo, Materia
 
+# Mock global de RabbitMQ para evitar errores de conexión al importar
+with patch("rabbitmq_manager.RabbitMQManager._connect", return_value=None), \
+     patch("rabbitmq_manager.RabbitMQRpcClient._connect", return_value=None):
+    from .models import Periodo, Materia
 
 class PeriodoAPITests(APITestCase):
     def setUp(self):
@@ -115,7 +118,7 @@ class MateriaAPITests(APITestCase):
         self.assertEqual(response.data["data"][0]["nrc"], "54321")
 
     @patch("academic.views.send_cierre_materia", return_value=True)
-    def test_close_materia_triggers_notificacion_grpc(self, mocked_send):
+    def test_close_materia_triggers_notificacion_event(self, mocked_send):
         materia = Materia.objects.create(
             nrc="67890",
             nombre="Redes",

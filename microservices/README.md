@@ -4,7 +4,7 @@ Este repositorio contiene el microservicio unificado del proyecto AGM para Servi
 
 - `ms-periodos-materias`: CRUD de periodos académicos y materias.
 
-El servicio expone REST y gRPC. El servidor gRPC corre en el puerto `50052` y el contrato compartido queda versionado en `../proto/periodosmaterias.proto`.
+El servicio expone una API REST y utiliza RabbitMQ para comunicación asíncrona y RPC.
 
 El despliegue usa una base de datos PostgreSQL independiente llamada `agm_periodos_materias_db`.
 
@@ -12,7 +12,6 @@ El despliegue usa una base de datos PostgreSQL independiente llamada `agm_period
 
 - `ms-periodos-materias/`
 - `archive/ms-materias/` para el servicio retirado
-- `../proto/periodosmaterias.proto`
 - `../docker-compose.yml`
 
 ## Requisitos
@@ -41,7 +40,6 @@ docker compose up --build
 Servicios expuestos:
 
 - `ms-periodos-materias`: `http://localhost:8001`
-- `ms-periodos-materias gRPC`: `localhost:50052`
 
 Endpoints de salud:
 
@@ -124,13 +122,13 @@ curl http://localhost:8001/api/materias/?periodo_id=1
 curl http://localhost:8001/api/materias/con-periodo/
 ```
 
-### 8. Cerrar una materia y notificar por gRPC
+### 8. Cerrar una materia y notificar por Eventos
 
 ```bash
 curl -X POST http://localhost:8001/api/materias/1/cerrar/
 ```
 
-Este endpoint marca la materia como inactiva y llama al servicio de notificaciones por gRPC usando `MS_NOTIFICACIONES_URL`.
+Este endpoint marca la materia como inactiva y publica un evento en RabbitMQ para que el servicio de notificaciones envíe los correos correspondientes.
 
 ### 9. Consultar una materia por ID
 
@@ -173,4 +171,4 @@ cd ms-periodos-materias && python manage.py test
 ## Notas de arquitectura
 
 - `ms-periodos-materias` concentra periodos y materias en un único proceso.
-- El esquema de gRPC se mantiene versionado en `../proto/periodosmaterias.proto` para la evolución del proyecto.
+- El esquema de comunicación se basa en RabbitMQ RPC y Eventos para desacoplamiento y escalabilidad.

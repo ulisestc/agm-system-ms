@@ -1,4 +1,4 @@
-# ── Stage: MS-3 Docentes & Alumnos (FastAPI + gRPC) ──────────────────────────
+# ── Stage: MS-3 Docentes & Alumnos (FastAPI + RabbitMQ RPC) ──────────────────────────
 FROM python:3.11-slim
 
 WORKDIR /app
