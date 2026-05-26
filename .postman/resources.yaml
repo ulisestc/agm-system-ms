@@ -1,6 +1,6 @@
 # Use this workspace to collaborate
 workspace:
-  id: 36d35a9f-80ec-40b7-8335-34e66b3b8510
+  id: bd2e61fb-b17b-4219-a8e2-7c253b31f89f
 
 localResources:
   specs:
@@ -12,3 +12,5 @@ localResources:
     - ../microservices/ms-asistencias/asistencias.proto
     - ../proto/auth.proto
     - ../proto/calificaciones.proto
+  docs:
+    - ..\infrastructure\README.md
