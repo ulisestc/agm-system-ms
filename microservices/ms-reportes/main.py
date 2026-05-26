@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from database import engine, Base, get_db
-from auth import get_current_user, require_roles
+from auth_middleware import get_current_user_rpc, require_roles
 import models, schemas, rabbitmq_client
 from generadores import (
     generar_excel_calificaciones, generar_pdf_calificaciones,

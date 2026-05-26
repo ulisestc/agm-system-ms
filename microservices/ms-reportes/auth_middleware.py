@@ -10,7 +10,6 @@ from fastapi import Security, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from rabbitmq_manager import RabbitMQRpcClient
 
-
 security = HTTPBearer()
 
 def get_current_user_rpc(credentials: HTTPAuthorizationCredentials = Security(security)):
@@ -40,3 +39,14 @@ def get_current_user_rpc(credentials: HTTPAuthorizationCredentials = Security(se
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en el bus de eventos: {str(e)}")
+
+def require_roles(*roles: str):
+    """Devuelve una dependencia que valida el token vía RPC y exige uno de los roles dados."""
+    def dependency(user_data: dict = Depends(get_current_user_rpc)) -> dict:
+        if user_data.get("rol") not in roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Acceso denegado. Roles permitidos: {list(roles)}",
+            )
+        return user_data
+    return dependency

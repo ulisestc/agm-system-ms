@@ -1,21 +1,30 @@
 import logging
 import os
 import sys
+from functools import lru_cache
 
 # Añadir el directorio raíz al path para importar rabbitmq_manager
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from rabbitmq_manager import RabbitMQManager, RabbitMQRpcClient
 
 logger = logging.getLogger("[ms-periodos-materias notifications]")
-rabbitmq = RabbitMQManager()
-rpc_client = RabbitMQRpcClient()
+
+
+@lru_cache(maxsize=1)
+def _get_rabbitmq():
+    return RabbitMQManager()
+
+
+@lru_cache(maxsize=1)
+def _get_rpc_client():
+    return RabbitMQRpcClient()
 
 def send_cierre_materia(materia_id: int, materia_nombre: str, nrc: str, auth_token: str) -> bool:
     """Obtiene alumnos y publica un evento de cierre de materia en RabbitMQ"""
     try:
         # 1. Obtener alumnos vía RPC desde ms-docentes
         logger.info(f"Obteniendo alumnos para NRC: {nrc}")
-        rpc_resp = rpc_client.call('rpc_docentes_queue', 'get_alumnos_by_materia', {'materiaId': nrc})
+        rpc_resp = _get_rpc_client().call('rpc_docentes_queue', 'get_alumnos_by_materia', {'materiaId': nrc})
         
         alumnos_emails = []
         if rpc_resp and 'alumnos' in rpc_resp:
@@ -28,7 +37,7 @@ def send_cierre_materia(materia_id: int, materia_nombre: str, nrc: str, auth_tok
             "alumnosEmails": alumnos_emails,
             "auth_token": auth_token
         }
-        rabbitmq.publish_event(
+        _get_rabbitmq().publish_event(
             exchange='events_exchange',
             routing_key='periodos.materia_cerrada',
             message=message
