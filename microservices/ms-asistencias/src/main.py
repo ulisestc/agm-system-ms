@@ -10,8 +10,8 @@ from src.database import engine, Base, get_db, redis_client
 from src import rabbitmq_server
 from src import models, schemas
 from src.rabbitmq_client import validar_alumno_en_materia
+from src.auth_middleware import get_current_user, require_roles
 
-# Crear tablas en PostgreSQL si no existen
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -20,7 +20,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configuración de CORS para permitir solicitudes desde cualquier origen
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,6 +27,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Health check (público, sin auth) ────────────────────────────────────────
 
 @app.get("/")
 def read_root():
@@ -37,15 +39,61 @@ def read_root():
         "message": "Conexión exitosa"
     }
 
-@app.post("/sesiones/iniciar", summary="Inicia una sesión de 10 minutos para una materia")
-def iniciar_sesion(req: schemas.IniciarSesionRequest, db: Session = Depends(get_db)):
+
+# ── Generar token QR para un alumno ─────────────────────────────────────────
+# El alumno llama a este endpoint para obtener su token dinámico
+
+@app.post(
+    "/qr/generar",
+    summary="Genera un token QR dinámico para el alumno"
+)
+def generar_token_qr(
+    req: schemas.GenerarQRRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Alumno")),
+):
+    """
+    Genera un token único de un solo uso para el alumno.
+    El frontend lo convierte en QR para que el docente escanee.
+    El token expira junto con la sesión activa (máx 10 min).
+    """
+    sesion_key = f"sesion_activa:{req.materia_id}"
+    if not redis_client.exists(sesion_key):
+        raise HTTPException(
+            status_code=404,
+            detail="No hay sesión activa para esta materia en este momento."
+        )
+
+    token = str(uuid.uuid4())
+    # Guardamos qué alumno generó este token para validarlo al escanear
+    redis_client.setex(f"qr_token:{token}", 600, req.alumno_id)
+
+    return {
+        "success": True,
+        "data": {"token_qr": token},
+        "message": "Token generado. Preséntalo en el QR antes de que expire la sesión."
+    }
+
+
+# ── Docente: iniciar sesión ───────────────────────────────────────────────────
+
+@app.post(
+    "/sesiones/iniciar",
+    summary="Inicia una sesión de 10 minutos para una materia"
+)
+def iniciar_sesion(
+    req: schemas.IniciarSesionRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     redis_key = f"sesion_activa:{req.materia_id}"
-    
-    # Validar si ya hay una sesión corriendo en Redis
+
     if redis_client.exists(redis_key):
-        raise HTTPException(status_code=400, detail="Ya existe una sesión activa para esta materia.")
-    
-    # Crear ID de sesión y guardar en Postgres (Historial)
+        raise HTTPException(
+            status_code=400,
+            detail="Ya existe una sesión activa para esta materia."
+        )
+
     sesion_id = str(uuid.uuid4())
     nueva_sesion = models.SesionAsistencia(
         id=sesion_id,
@@ -55,7 +103,6 @@ def iniciar_sesion(req: schemas.IniciarSesionRequest, db: Session = Depends(get_
     db.add(nueva_sesion)
     db.commit()
 
-    # Guardar en Redis con TTL de 600 segundos (10 minutos)
     sesion_data = {
         "sesion_id": sesion_id,
         "inicio_timestamp": datetime.now().timestamp()
@@ -63,47 +110,61 @@ def iniciar_sesion(req: schemas.IniciarSesionRequest, db: Session = Depends(get_
     redis_client.setex(redis_key, 600, json.dumps(sesion_data))
 
     return {
-        "success": True, 
+        "success": True,
         "data": {"sesion_id": sesion_id},
         "message": "Sesión iniciada. Expirará en 10 minutos."
     }
 
-@app.post("/asistencias/registrar", summary="Registra asistencia mediante escaneo de QR")
-def registrar_asistencia(req: schemas.RegistrarAsistenciaRequest, db: Session = Depends(get_db)):
-    # Validar Anti-replay (el código no se puede usar 2 veces)
+
+# ── Alumno/Docente: registrar asistencia ─────────────────────────────────────
+
+@app.post(
+    "/asistencias/registrar",
+    summary="Registra asistencia mediante escaneo de QR"
+)
+def registrar_asistencia(
+    req: schemas.RegistrarAsistenciaRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    # 1. Verificar sesión activa primero
+    sesion_key = f"sesion_activa:{req.materia_id}"
+    sesion_activa_str = redis_client.get(sesion_key)
+    if not sesion_activa_str:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay una sesión activa para esta materia o ya expiró."
+        )
+
+    sesion_activa = json.loads(sesion_activa_str)
+    tiempo_transcurrido = datetime.now().timestamp() - sesion_activa["inicio_timestamp"]
+
+    if tiempo_transcurrido > 600:
+        raise HTTPException(status_code=400, detail="La sesión ha expirado.")
+
+    # 2. Validar anti-replay
     token_key = f"qr_usado:{req.token_qr}"
     if redis_client.exists(token_key):
-        raise HTTPException(status_code=400, detail="Código QR inválido o ya utilizado (Anti-replay).")
+        raise HTTPException(
+            status_code=400,
+            detail="Código QR inválido o ya utilizado (Anti-replay)."
+        )
 
-    # Consultar al MS-3 (Docentes) si el alumno pertenece a la materia
+    # 3. Validar inscripción vía RabbitMQ → ms-docentes
     esta_inscrito = validar_alumno_en_materia(req.alumno_id, req.materia_id)
     if not esta_inscrito:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail=f"El alumno {req.alumno_id} no está inscrito en la materia {req.materia_id}."
         )
-    # ----------------------------
 
-    # Verificar si hay sesión activa
-    sesion_key = f"sesion_activa:{req.materia_id}"
-    sesion_activa_str = redis_client.get(sesion_key)
-    
-    if not sesion_activa_str:
-        raise HTTPException(status_code=404, detail="No hay una sesión activa para esta materia o ya expiró.")
-    
-    sesion_activa = json.loads(sesion_activa_str)
-    tiempo_transcurrido = datetime.now().timestamp() - sesion_activa["inicio_timestamp"]
-    
-    # Determinar estado de asistencia
-    # <= 300 seg (5 mins) = Presente | <= 600 seg (10 mins) = Retardo
+    # 4. Determinar estado según tiempo
     if tiempo_transcurrido <= 300:
         estado = "Presente"
-    elif tiempo_transcurrido <= 600:
-        estado = "Retardo"
     else:
-        raise HTTPException(status_code=400, detail="La sesión ha expirado.")
+        estado = "Retardo"
 
-    # Guardar en Postgres
+    # 5. Guardar en PostgreSQL
     nuevo_registro = models.RegistroAsistencia(
         sesion_id=sesion_activa["sesion_id"],
         alumno_id=req.alumno_id,
@@ -113,57 +174,78 @@ def registrar_asistencia(req: schemas.RegistrarAsistenciaRequest, db: Session = 
     db.add(nuevo_registro)
     db.commit()
 
-    # Eliminar el token QR en Redis para que no se re-utilice (se guarda 10 mins por seguridad)
+    # 6. Marcar token como usado (anti-replay)
     redis_client.setex(token_key, 600, "usado")
 
     return {
-        "success": True, 
+        "success": True,
         "data": {"estado": estado},
         "message": "Asistencia registrada con éxito."
     }
 
-@app.delete("/sesiones/{materia_id}/cerrar", summary="Cierra forzosamente una sesión activa")
-def cerrar_sesion(materia_id: str, db: Session = Depends(get_db)):
+
+# ── Docente: cerrar sesión ───────────────────────────────────────────────────
+
+@app.delete(
+    "/sesiones/{materia_id}/cerrar",
+    summary="Cierra forzosamente una sesión activa"
+)
+def cerrar_sesion(
+    materia_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     sesion_key = f"sesion_activa:{materia_id}"
-    
+
     if not redis_client.exists(sesion_key):
-        raise HTTPException(status_code=404, detail="No hay una sesión activa para esta materia.")
-    
-    # Obtener el ID antes de borrar
+        raise HTTPException(
+            status_code=404,
+            detail="No hay una sesión activa para esta materia."
+        )
+
     sesion_data = json.loads(redis_client.get(sesion_key))
     sesion_id = sesion_data["sesion_id"]
-    
-    # Eliminar de Redis (cierre forzoso)
+
     redis_client.delete(sesion_key)
-    
-    # Actualizar estado en Postgres
-    db_sesion = db.query(models.SesionAsistencia).filter(models.SesionAsistencia.id == sesion_id).first()
+
+    db_sesion = db.query(models.SesionAsistencia).filter(
+        models.SesionAsistencia.id == sesion_id
+    ).first()
     if db_sesion:
         db_sesion.activa = False
         db.commit()
 
     return {
-        "success": True, 
+        "success": True,
         "data": {},
         "message": "Sesión cerrada correctamente."
     }
 
-@app.get("/asistencias/{materia_id}/hoy", summary="Obtiene los alumnos que han registrado asistencia en la sesión actual")
-def asistencias_hoy(materia_id: str, db: Session = Depends(get_db)):
-    # Buscar la sesión más reciente de esta materia en Postgres
+
+# ── Docente/Admin: consultas ─────────────────────────────────────────────────
+
+@app.get(
+    "/asistencias/{materia_id}/hoy",
+    summary="Obtiene asistencias de la sesión actual"
+)
+def asistencias_hoy(
+    materia_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
+):
     sesion_reciente = db.query(models.SesionAsistencia).filter(
         models.SesionAsistencia.materia_id == materia_id
     ).order_by(models.SesionAsistencia.fecha_creacion.desc()).first()
-    
+
     if not sesion_reciente:
         return {"success": True, "data": [], "message": "No hay sesiones registradas hoy."}
-        
+
     registros = db.query(models.RegistroAsistencia).filter(
         models.RegistroAsistencia.sesion_id == sesion_reciente.id
     ).all()
-    
+
     return {
-        "success": True, 
+        "success": True,
         "data": {
             "sesion_id": sesion_reciente.id,
             "fecha": sesion_reciente.fecha_creacion,
@@ -172,25 +254,30 @@ def asistencias_hoy(materia_id: str, db: Session = Depends(get_db)):
         "message": "Asistencias de la sesión más reciente obtenidas."
     }
 
-@app.get("/asistencias/{materia_id}/historial", summary="Obtiene el historial de sesiones pasadas de una materia")
+
+@app.get(
+    "/asistencias/{materia_id}/historial",
+    summary="Historial paginado de sesiones de una materia"
+)
 def historial_asistencias(
-    materia_id: str, 
-    page: int = Query(1, ge=1, description="Número de página"), 
-    limit: int = Query(10, ge=1, le=100, description="Cantidad de registros por página"), 
-    db: Session = Depends(get_db)
+    materia_id: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles("Docente", "Administrador")),
 ):
     offset = (page - 1) * limit
-    
+
     total_sesiones = db.query(models.SesionAsistencia).filter(
         models.SesionAsistencia.materia_id == materia_id
     ).count()
-    
+
     sesiones = db.query(models.SesionAsistencia).filter(
         models.SesionAsistencia.materia_id == materia_id
     ).order_by(models.SesionAsistencia.fecha_creacion.desc()).offset(offset).limit(limit).all()
-    
+
     return {
-        "success": True, 
+        "success": True,
         "data": {
             "total_records": total_sesiones,
             "current_page": page,
@@ -201,6 +288,9 @@ def historial_asistencias(
         "message": "Historial paginado obtenido correctamente."
     }
 
+
+# ── Startup ──────────────────────────────────────────────────────────────────
+
 def _start_rabbitmq():
     try:
         rabbitmq_server.serve()
@@ -208,7 +298,6 @@ def _start_rabbitmq():
         print(f"[WARNING] No se pudo iniciar el servidor RabbitMQ-RPC: {e}")
 
 
-# Evento de inicio de FastAPI para arrancar el servidor RabbitMQ en segundo plano
 @app.on_event("startup")
 def startup_event():
     rb_thread = threading.Thread(target=_start_rabbitmq, daemon=True)
