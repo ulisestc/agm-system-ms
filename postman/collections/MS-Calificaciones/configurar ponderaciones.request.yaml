@@ -1,0 +1,20 @@
+$kind: http-request
+name: Configurar Ponderaciones
+method: POST
+url: '{{base_url_calificaciones}}/ponderaciones/{{materia_id}}'
+order: 8000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "ponderaciones": [
+        {"nombre": "Examen Parcial 1", "ponderacion": 30},
+        {"nombre": "Examen Parcial 2", "ponderacion": 30},
+        {"nombre": "Proyecto Final", "ponderacion": 40}
+      ]
+    }
