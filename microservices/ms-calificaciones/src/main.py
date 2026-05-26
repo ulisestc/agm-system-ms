@@ -210,6 +210,14 @@ def calcular_promedio_final(
     db: Session = Depends(get_db),
     user: dict = Depends(require_roles("Docente", "Administrador")),
 ):
+    if user["rol"] == "Docente":
+        es_su_materia = validar_propiedad_materia(str(user["id"]), materia_id)
+        if not es_su_materia:
+            raise HTTPException(
+                status_code=403,
+                detail="Acceso denegado. No puedes ver la información de una materia ajena."
+            )
+
     materia_id = materia_id.strip()
     alumno_id = alumno_id.strip()
     
@@ -256,6 +264,14 @@ def obtener_ponderaciones(
     db: Session = Depends(get_db),
     user: dict = Depends(require_roles("Docente", "Administrador")),
 ):
+    if user["rol"] == "Docente":
+        es_su_materia = validar_propiedad_materia(str(user["id"]), materia_id)
+        if not es_su_materia:
+            raise HTTPException(
+                status_code=403,
+                detail="Acceso denegado. No puedes ver la información de una materia ajena."
+            )
+
     actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == materia_id).all()
     total = sum(act.ponderacion for act in actividades)
     return {"success": True, "data": {"materia_id": materia_id, "total_ponderacion": total, "detalles": actividades}}
@@ -370,6 +386,14 @@ def obtener_concentrado(
     db: Session = Depends(get_db),
     user: dict = Depends(require_roles("Docente", "Administrador")),
 ):
+    if user["rol"] == "Docente":
+        es_su_materia = validar_propiedad_materia(str(user["id"]), materia_id)
+        if not es_su_materia:
+            raise HTTPException(
+                status_code=403,
+                detail="Acceso denegado. No puedes ver la información de una materia ajena."
+            )
+
     actividades = db.query(models.Actividad).filter(models.Actividad.materia_id == materia_id).all()
     if not actividades:
         raise HTTPException(status_code=404, detail="Sin actividades en esta materia.")
