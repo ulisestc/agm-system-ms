@@ -4,6 +4,8 @@ method: POST
 url: '{{base_url_reportes}}/reportes/asistencias/:materia_id'
 order: 5000
 headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
   - key: Content-Type
     value: application/json
 queryParams:

@@ -4,6 +4,8 @@ method: POST
 url: '{{base_url_docentes}}/alumnos/importar/{{materia_id}}'
 order: 1300
 headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
   - key: Content-Type
     value: multipart/form-data
 body:

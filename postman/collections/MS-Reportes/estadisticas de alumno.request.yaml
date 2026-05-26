@@ -6,3 +6,6 @@ order: 7000
 pathVariables:
   - key: alumno_id
     value: '{{alumno_id}}'
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

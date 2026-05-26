@@ -1,8 +1,8 @@
 $kind: http-request
-name: Registrar Asistencia por QR
+name: 05 - Registrar Asistencia
 method: POST
 url: '{{base_url_asistencias}}/asistencias/registrar'
-order: 3000
+order: 500
 headers:
   - key: Authorization
     value: 'Bearer {{auth_token}}'

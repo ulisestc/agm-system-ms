@@ -3,3 +3,6 @@ name: Dar de Baja Alumno
 method: DELETE
 url: '{{base_url_docentes}}/alumnos/{{alumno_id}}/baja'
 order: 1500
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

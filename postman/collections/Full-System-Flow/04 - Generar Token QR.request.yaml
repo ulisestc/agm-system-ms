@@ -1,8 +1,8 @@
 $kind: http-request
-name: Crear Usuario
-url: '{{base_url_auth}}/usuarios/'
+name: 04 - Generar Token QR
 method: POST
-order: 2549
+url: '{{base_url_asistencias}}/qr/generar'
+order: 400
 headers:
   - key: Authorization
     value: 'Bearer {{auth_token}}'
@@ -12,7 +12,6 @@ body:
   type: json
   content: |-
     {
-      "email": "alumno@buap.mx",
-      "password": "password123",
-      "rol": "ALUMNO"
+      "alumno_id": "{{alumno_id}}",
+      "materia_id": "{{materia_id}}"
     }

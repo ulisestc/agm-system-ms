@@ -8,3 +8,6 @@ queryParams:
     value: '1'
   - key: limit
     value: '10'
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
