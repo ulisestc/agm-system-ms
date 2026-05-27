@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from database import engine, Base, get_db
-from auth_middleware import get_current_user_rpc, require_roles
+from auth_middleware import require_roles
 import models, schemas, rabbitmq_client
 from generadores import (
     generar_excel_calificaciones, generar_pdf_calificaciones,
@@ -42,10 +42,17 @@ app = FastAPI(
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 
+origins = [
+    "https://agm-system-frontend-joselyn-agm.vercel.app",
+    "https://agm-system-frontend-30ytwlq1y-joselyn-agm.vercel.app",
+    "https://agm-system-frontend.vercel.app",
+    "http://localhost:4200",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
@@ -62,7 +69,7 @@ def read_root():
 
 @app.get(
     "/reportes/calificaciones/{materia_id}",
-    summary="Descargar reporte de calificaciones (datos demo)",
+    summary="Descargar reporte de calificaciones",
     tags=["Reportes"],
 )
 def reporte_calificaciones(
@@ -72,24 +79,26 @@ def reporte_calificaciones(
     _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     try:
-        datos = None
-        try:
-            materia_info = rabbitmq_client.get_materia_by_id(int(materia_id))
-            alumnos      = rabbitmq_client.get_alumnos_by_materia(materia_id) or []
-            if materia_info:
-                datos = {
-                    "materia_nombre": materia_info["nombre"],
-                    "materia_nrc":    materia_info["nrc"],
-                    "periodo":        "Período Activo",
-                    "docente":        materia_info["docente_nombre"],
-                    "alumnos": [
-                        {"matricula": a["id"], "nombre": a["nombre"],
-                         "promedio_real": 0, "calificacion_final": 0}
-                        for a in alumnos
-                    ],
-                }
-        except Exception:
-            pass  # Si MS-2 o MS-3 no responden, se usa datos demo
+        materia_info = rabbitmq_client.get_materia_by_id(int(materia_id))
+        if not materia_info:
+            raise HTTPException(
+                status_code=503,
+                detail="No se pudo obtener la información de la materia. Verifica que ms-periodos-materias esté disponible.",
+            )
+
+        alumnos = rabbitmq_client.get_alumnos_by_materia(materia_id) or []
+
+        datos = {
+            "materia_nombre": materia_info["nombre"],
+            "materia_nrc":    materia_info["nrc"],
+            "periodo":        "Período Activo",
+            "docente":        materia_info.get("docente_nombre", ""),
+            "alumnos": [
+                {"matricula": a["id"], "nombre": a["nombre"],
+                 "promedio_real": 0, "calificacion_final": 0}
+                for a in alumnos
+            ],
+        }
 
         if formato == "xls":
             file_bytes, filename = generar_excel_calificaciones(materia_id, datos)
@@ -101,11 +110,19 @@ def reporte_calificaciones(
         db.add(models.ReporteGenerado(materia_id=materia_id, tipo="calificaciones", formato=formato))
         db.commit()
 
+        rabbitmq_client.publicar_reporte_generado(
+            tipo="calificaciones",
+            materia_id=materia_id,
+            formato=formato,
+        )
+
         return Response(
             content=file_bytes,
             media_type=media_type,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al generar el reporte: {str(e)}")
 
@@ -142,11 +159,20 @@ def reporte_calificaciones_con_datos(
         ))
         db.commit()
 
+        rabbitmq_client.publicar_reporte_generado(
+            tipo="calificaciones",
+            materia_id=materia_id,
+            formato=formato,
+            docente_id=str(body.docente_id) if body.docente_id else None,
+        )
+
         return Response(
             content=file_bytes,
             media_type=media_type,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al generar el reporte: {str(e)}")
 
@@ -155,7 +181,7 @@ def reporte_calificaciones_con_datos(
 
 @app.get(
     "/reportes/asistencias/{materia_id}",
-    summary="Descargar reporte de asistencias (datos demo)",
+    summary="Descargar reporte de asistencias",
     tags=["Reportes"],
 )
 def reporte_asistencias(
@@ -165,21 +191,23 @@ def reporte_asistencias(
     _user: dict = Depends(require_roles("Administrador", "Docente")),
 ):
     try:
-        datos = None
-        try:
-            materia_info = rabbitmq_client.get_materia_by_id(int(materia_id))
-            alumnos      = rabbitmq_client.get_alumnos_by_materia(materia_id) or []
-            sesiones     = rabbitmq_client.construir_sesiones_asistencia(alumnos, materia_id)
-            if materia_info:
-                datos = {
-                    "materia_nombre": materia_info["nombre"],
-                    "materia_nrc":    materia_info["nrc"],
-                    "periodo":        "Período Activo",
-                    "docente":        materia_info["docente_nombre"],
-                    "sesiones":       sesiones,
-                }
-        except Exception:
-            pass  # Si MS-2, MS-3 o MS-5 no responden, se usa datos demo
+        materia_info = rabbitmq_client.get_materia_by_id(int(materia_id))
+        if not materia_info:
+            raise HTTPException(
+                status_code=503,
+                detail="No se pudo obtener la información de la materia. Verifica que ms-periodos-materias esté disponible.",
+            )
+
+        alumnos  = rabbitmq_client.get_alumnos_by_materia(materia_id) or []
+        sesiones = rabbitmq_client.construir_sesiones_asistencia(alumnos, materia_id)
+
+        datos = {
+            "materia_nombre": materia_info["nombre"],
+            "materia_nrc":    materia_info["nrc"],
+            "periodo":        "Período Activo",
+            "docente":        materia_info.get("docente_nombre", ""),
+            "sesiones":       sesiones,
+        }
 
         if formato == "xls":
             file_bytes, filename = generar_excel_asistencias(materia_id, datos)
@@ -191,11 +219,19 @@ def reporte_asistencias(
         db.add(models.ReporteGenerado(materia_id=materia_id, tipo="asistencias", formato=formato))
         db.commit()
 
+        rabbitmq_client.publicar_reporte_generado(
+            tipo="asistencias",
+            materia_id=materia_id,
+            formato=formato,
+        )
+
         return Response(
             content=file_bytes,
             media_type=media_type,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al generar el reporte: {str(e)}")
 
@@ -231,11 +267,20 @@ def reporte_asistencias_con_datos(
         ))
         db.commit()
 
+        rabbitmq_client.publicar_reporte_generado(
+            tipo="asistencias",
+            materia_id=materia_id,
+            formato=formato,
+            docente_id=str(body.docente_id) if body.docente_id else None,
+        )
+
         return Response(
             content=file_bytes,
             media_type=media_type,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al generar el reporte: {str(e)}")
 

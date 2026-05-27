@@ -1,9 +1,10 @@
 import os
 import logging
-from rabbitmq_manager import RabbitMQRpcClient
+from rabbitmq_manager import RabbitMQRpcClient, RabbitMQManager
 
 logger = logging.getLogger("[RabbitMQ-Client ms-reportes]")
 rpc_client = RabbitMQRpcClient()
+event_manager = RabbitMQManager()
 
 def get_materia_by_id(materia_id: int) -> dict | None:
     """Consulta ms-periodos-materias vía RPC"""
@@ -94,6 +95,23 @@ def get_estadisticas_asistencia(materia_id: str) -> dict | None:
     except Exception as e:
         logger.error(f"Error calling get_estadisticas_asistencia: {e}")
         return None
+
+def publicar_reporte_generado(tipo: str, materia_id: str, formato: str, docente_id: str = None):
+    """Publica evento asíncrono al generar un reporte (fire-and-forget)"""
+    try:
+        event_manager.publish_event(
+            exchange="events_exchange",
+            routing_key="reportes.generado",
+            message={
+                "tipo": tipo,
+                "materia_id": materia_id,
+                "formato": formato,
+                "docente_id": docente_id,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error publicando evento reporte_generado: {e}")
+
 
 def construir_sesiones_asistencia(alumnos: list, materia_id: str) -> list:
     """
