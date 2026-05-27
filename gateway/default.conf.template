@@ -1,52 +1,70 @@
 server {
     listen 80;
 
+    # Resolver interno de Railway para encontrar servicios dinámicamente
+    resolver 127.0.0.11 valid=30s;
+
+    # Error logs para debuggear mejor en los logs de Railway
+    error_log  /var/log/nginx/error.log notice;
+
     # ms-1 auth    
     location /api/auth/ {
-        proxy_pass http://${MS_AUTH_HOST}:8000/;
+        set $auth_backend ${MS_AUTH_HOST};
+        proxy_pass http://$auth_backend:8000/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # ms-2 periodos materias
     location /api/periodos/ {
-        proxy_pass http://${MS_PERIODOS_HOST}:8000/;
+        set $periodos_backend ${MS_PERIODOS_HOST};
+        proxy_pass http://$periodos_backend:8000/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # ms-3 docentes alumnos
     location /api/docentes/ {
-        proxy_pass http://${MS_DOCENTES_HOST}:8003/;
+        set $docentes_backend ${MS_DOCENTES_HOST};
+        proxy_pass http://$docentes_backend:8003/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # 5. ms-4 calificaciones
     location /api/calificaciones/ {
-        proxy_pass http://${MS_CALIFICACIONES_HOST}:8004/;
+        set $calificaciones_backend ${MS_CALIFICACIONES_HOST};
+        proxy_pass http://$calificaciones_backend:8004/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # ms-5 asistencias
     location /api/asistencias/ {
-        proxy_pass http://${MS_ASISTENCIAS_HOST}:8005/;
+        set $asistencias_backend ${MS_ASISTENCIAS_HOST};
+        proxy_pass http://$asistencias_backend:8005/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # ms-7 reportes
     location /api/reportes/ {
-        proxy_pass http://${MS_REPORTES_HOST}:8007/;
+        set $reportes_backend ${MS_REPORTES_HOST};
+        proxy_pass http://$reportes_backend:8007/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # Health check del Gateway
