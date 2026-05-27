@@ -1,13 +1,12 @@
 const emailService = require('../services/email.service');
 const rpcClient = require('../clients/rpc_client');
-const mailer = require('../config/mailer');
 
 class NotificationController {
     async handleRetardo(data) {
         try {
             console.log(`Procesando retardo para alumno ${data.alumno_id} en materia ${data.materia_id}`);
 
-            let destEmail = process.env.ALERT_EMAIL || process.env.MAIL_FROM;
+            let destEmail = process.env.ALERT_EMAIL;
             let nombreAlumno = `Alumno ID ${data.alumno_id}`;
 
             const response = await rpcClient.call('rpc_docentes_queue', 'get_alumno', { alumnoId: data.alumno_id });
@@ -18,15 +17,12 @@ class NotificationController {
             }
 
             const mailOptions = {
-                from: process.env.MAIL_FROM,
                 to: destEmail,
                 subject: `Aviso de Retardo - Materia ${data.materia_id}`,
-                text: `Hola ${nombreAlumno},\n\nSe ha registrado un retardo en tu asistencia el día ${data.timestamp}.
-\nSaludos.`
+                html: `<p>Hola ${nombreAlumno},</p><p>Se ha registrado un retardo en tu asistencia el día ${data.timestamp}.</p><p>Saludos.</p>`
             };
 
-            await mailer.sendMail(mailOptions);
-            console.log(`Correo de retardo enviado a ${destEmail}`);
+            await emailService.sendMail(mailOptions, 'retardo', data.alumno_id);
         } catch (error) {
             console.error("Error al procesar notificación de retardo:", error);
         }
@@ -36,7 +32,6 @@ class NotificationController {
         const { alumnoNombre, alumnoEmail, alumnoId, materiaNombre, claveUnica } = data;
         
         const mailOptions = {
-            from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
             to: alumnoEmail,
             subject: `¡Bienvenido a la materia: ${materiaNombre}!`,
             html: `
@@ -54,7 +49,6 @@ class NotificationController {
         const { alumnoNombre, docenteNombre, docenteEmail, docenteId } = data;
 
         const mailOptions = {
-            from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
             to: docenteEmail,
             subject: `Aviso del Sistema: Baja de Alumno - ${alumnoNombre}`,
             html: `
@@ -75,12 +69,9 @@ class NotificationController {
             return { success: true, message: "No recipients" };
         }
 
-        const correosBcc = Array.isArray(alumnosEmails) ? alumnosEmails.join(', ') : alumnosEmails;
-
         const mailOptions = {
-            from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
-            to: process.env.MAIL_FROM,
-            bcc: correosBcc,
+            to: process.env.MAIL_FROM_EMAIL, // Se envía al remitente como principal
+            bccList: Array.isArray(alumnosEmails) ? alumnosEmails : [alumnosEmails],
             subject: `Aviso Académico: Cierre de la materia ${materiaNombre}`,
             html: `
                 <h2>Aviso Importante</h2>
@@ -95,11 +86,10 @@ class NotificationController {
 
     async handleResetPassword(data) {
         const { email, token } = data;
-        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+        const baseUrl = process.env.FRONTEND_URL;
         const resetUrl = `${baseUrl}/restablecer?token=${token}`;
 
         const mailOptions = {
-            from: process.env.MAIL_FROM || '"AGM Sistema" <noreply@agm.buap.mx>',
             to: email,
             subject: `Recuperación de Contraseña - AGM`,
             html: `
