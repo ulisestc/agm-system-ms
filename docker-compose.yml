@@ -49,6 +49,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - SECRET_KEY=clave_super_secreta_desarrollo_agm
       - DATABASE_URL=postgresql://postgres:root@postgres-db:5432/agm_auth_db
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       - RESET_PASSWORD_TOKEN_EXPIRE_MINUTES=30
@@ -137,6 +138,7 @@ services:
     env_file:
       - ./microservices/ms-periodos-materias/.env
     environment:
+      - SECRET_KEY=clave_super_secreta_desarrollo_agm
       - DB_ENGINE=django.db.backends.postgresql
       - DB_HOST=postgres-db
       - DB_PORT=5432
