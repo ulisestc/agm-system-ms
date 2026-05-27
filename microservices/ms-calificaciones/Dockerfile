@@ -10,7 +10,7 @@ COPY microservices/ms-calificaciones/requirements.txt .
 RUN python -m pip install --upgrade pip setuptools wheel \
  && pip install --prefer-binary -r requirements.txt
 
-COPY microservices/ms-calificaciones/src ./src
+COPY src ./src
 
 EXPOSE 8004
 

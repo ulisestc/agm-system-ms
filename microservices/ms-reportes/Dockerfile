@@ -12,7 +12,7 @@ COPY microservices/ms-reportes/requirements.txt .
 RUN python -m pip install --upgrade pip setuptools wheel \
  && pip install --prefer-binary -r requirements.txt
 
-COPY microservices/ms-reportes/ .
+COPY . .
 
 # Puerto REST (FastAPI/uvicorn)
 EXPOSE 8007

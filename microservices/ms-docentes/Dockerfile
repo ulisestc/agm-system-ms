@@ -14,7 +14,7 @@ RUN python -m pip install --upgrade pip setuptools wheel \
  && pip install --prefer-binary -r requirements.txt
 
 # Copiar código fuente
-COPY microservices/ms-docentes/ .
+COPY . .
 
 # Exponer puertos: 8003 (REST)
 EXPOSE 8003

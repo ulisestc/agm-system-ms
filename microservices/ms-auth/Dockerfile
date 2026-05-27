@@ -14,7 +14,7 @@ RUN python -m pip install --upgrade pip setuptools wheel \
  && pip install --prefer-binary -r requirements.txt
 
 # Copiar el código fuente del microservicio
-COPY microservices/ms-auth/ .
+COPY . .
 
 # Puerto REST
 EXPOSE 8000

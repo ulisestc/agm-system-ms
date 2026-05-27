@@ -10,7 +10,7 @@ COPY microservices/ms-asistencias/requirements.txt .
 RUN python -m pip install --upgrade pip setuptools wheel \
  && pip install --prefer-binary -r requirements.txt
 
-COPY microservices/ms-asistencias/src ./src
+COPY src ./src
 
 EXPOSE 8005
 

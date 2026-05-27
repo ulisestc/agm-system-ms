@@ -42,8 +42,8 @@ services:
   # MS-1 Autenticación y Autorización
   ms-auth:
     build:
-      context: .
-      dockerfile: microservices/ms-auth/Dockerfile
+      context: ./microservices/ms-auth
+      dockerfile: Dockerfile
     container_name: agm_ms_auth
     restart: always
     ports:
@@ -60,8 +60,8 @@ services:
   # MS-5 Asistencias QR
   ms-asistencias:
     build:
-      context: .
-      dockerfile: microservices/ms-asistencias/Dockerfile
+      context: ./microservices/ms-asistencias
+      dockerfile: Dockerfile
     container_name: agm_ms_asistencias
     restart: always
     ports:
@@ -79,8 +79,8 @@ services:
     
   ms-notificaciones:
       build: 
-        context: .
-        dockerfile: microservices/ms-notificaciones/Dockerfile
+        context: ./microservices/ms-notificaciones
+        dockerfile: Dockerfile
       container_name: agm_ms_notificaciones
       restart: always
       env_file:
@@ -97,8 +97,8 @@ services:
   # MS-3 Docentes & Alumnos
   ms-docentes:
     build:
-      context: .
-      dockerfile: microservices/ms-docentes/Dockerfile
+      context: ./microservices/ms-docentes
+      dockerfile: Dockerfile
     container_name: agm_ms_docentes
     restart: always
     ports:
@@ -114,8 +114,8 @@ services:
   # MS-4 Calificaciones
   ms-calificaciones:
     build:
-      context: .
-      dockerfile: microservices/ms-calificaciones/Dockerfile
+      context: ./microservices/ms-calificaciones
+      dockerfile: Dockerfile
     container_name: agm_ms_calificaciones
     restart: always
     ports:
@@ -131,29 +131,14 @@ services:
   ms-periodos-materias:
     build:
       context: ./microservices/ms-periodos-materias
+      dockerfile: Dockerfile
     container_name: agm_ms_periodos_materias
-    restart: always
-    env_file:
-      - ./microservices/ms-periodos-materias/.env
-    environment:
-      - DB_ENGINE=django.db.backends.postgresql
-      - DB_HOST=postgres-db
-      - DB_PORT=5432
-      - DB_NAME=agm_periodos_materias_db
-      - DB_USER=postgres
-      - DB_PASSWORD=root
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
-    ports:
-      - "8001:8000"
-    depends_on:
-      - postgres-db
-      - rabbitmq
- 
+...
   # MS-7 Reportes
   ms-reportes:
     build:
-      context: .
-      dockerfile: microservices/ms-reportes/Dockerfile
+      context: ./microservices/ms-reportes
+      dockerfile: Dockerfile
     container_name: agm_ms_reportes
     restart: always
     ports:
