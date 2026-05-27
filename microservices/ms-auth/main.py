@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -54,7 +54,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -130,7 +130,7 @@ def login(
         )
 
     access_token = create_access_token(
-        data={"sub": str(db_user.id), "rol": db_user.rol}
+        data={"sub": str(db_user.id), "rol": db_user.rol.value}
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
@@ -155,7 +155,7 @@ def forgot_password(
     if usuario is None:
         return response
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     db.query(models.PasswordResetToken).filter(
         models.PasswordResetToken.usuario_id == usuario.id,
         models.PasswordResetToken.used_at.is_(None),
@@ -183,7 +183,7 @@ def reset_password(
     request: schemas.ResetPasswordRequest,
     db: Session = Depends(get_db),
 ):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     token_hash = hash_reset_token(request.token)
 
     reset_token = db.query(models.PasswordResetToken).filter(
