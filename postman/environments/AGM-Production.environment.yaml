@@ -1,0 +1,30 @@
+name: AGM-Production
+values:
+  - key: base_url_auth
+    value: 'https://agm-system-ms-production.up.railway.app/auth'
+  - key: base_url_asistencias
+    value: 'https://agm-system-ms-production.up.railway.app/asistencias'
+  - key: base_url_reportes
+    value: 'https://agm-system-ms-production.up.railway.app/reportes'
+  - key: materia_id
+    value: '1'
+  - key: docente_id
+    value: '1'
+  - key: alumno_id
+    value: '1'
+  - key: auth_token
+    value: ''
+  - key: docente_email
+    value: docente@example.com
+  - key: alumno_email
+    value: alumno@example.com
+  - key: password
+    value: password123
+  - key: base_url_docentes
+    value: 'https://agm-system-ms-production.up.railway.app/docentes'
+  - key: base_url_periodos
+    value: 'https://agm-system-ms-production.up.railway.app/periodos'
+  - key: base_url_calificaciones
+    value: 'https://agm-system-ms-production.up.railway.app/calificaciones'
+  - key: base_url
+    value: ''

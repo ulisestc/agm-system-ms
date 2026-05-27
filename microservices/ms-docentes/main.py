@@ -20,7 +20,7 @@ app = FastAPI(
     title="MS-3 Docentes & Alumnos",
     description=(
         "Microservicio de importación y gestión de Docentes y Alumnos del sistema AGM. "
-        "Procesa PDF de programación académica y Excel de alumnos inscritos por materia."
+        "Procesa PDF de programación académica y PDF de alumnos inscritos por materia."
     ),
     version="1.0.0",
 )

@@ -104,3 +104,92 @@ def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> int:
 def listar_docentes(db: Session) -> List[models.Docente]:
     """Devuelve todos los docentes con sus materias (eager load automático)."""
     return db.query(models.Docente).all()
+
+
+# ── Importación del Directorio "Personal Docente" ─────────────────────────────
+import re
+
+def _parsear_pagina_directorio(pagina) -> List[dict]:
+    """
+    Extrae texto de una página del PDF "Personal Docente" y lo parsea línea por línea.
+    """
+    registros = []
+    texto = pagina.extract_text()
+    if not texto:
+        return registros
+    
+    lineas = texto.split('\n')
+    started = False
+    
+    for line in lineas:
+        line = line.strip()
+        if not line:
+            continue
+        # Buscar el encabezado para empezar a parsear (o seguir si ya empezó)
+        if "Nombre Correo" in line:
+            started = True
+            continue
+        if not started:
+            continue
+        
+        # Parsear con regex
+        match = re.search(r'^(.*?)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s*(.*)$', line)
+        if match:
+            nombre = match.group(1).strip()
+            email = match.group(2).strip()
+            rest = match.group(3).strip()
+            ubicacion = rest.split()[0] if rest else ""
+            
+            registros.append({
+                "nombre": nombre,
+                "email": email,
+                "ubicacion": ubicacion
+            })
+            
+    return registros
+
+def importar_directorio_docentes_pdf(contenido: bytes, db: Session) -> int:
+    """
+    Procesa el PDF de "Personal Docente" para actualizar/crear la información de los docentes
+    (email y departamento/ubicación).
+    
+    Returns:
+        Número de registros de docentes importados/actualizados.
+    """
+    registros_importados = 0
+
+    with pdfplumber.open(BytesIO(contenido)) as pdf:
+        filas = []
+        for pagina in pdf.pages:
+            filas.extend(_parsear_pagina_directorio(pagina))
+
+    for fila in filas:
+        nombre_docente = fila["nombre"]
+        if not nombre_docente:
+            continue
+
+        # 1. Buscar o crear el docente
+        docente = (
+            db.query(models.Docente)
+            .filter(models.Docente.nombre == nombre_docente)
+            .first()
+        )
+        if not docente:
+            docente = models.Docente(
+                nombre=nombre_docente,
+                email=fila["email"],
+                departamento=fila["ubicacion"]
+            )
+            db.add(docente)
+            registros_importados += 1
+        else:
+            # Actualiza datos si ya existía y si trajo nueva información
+            # Se prioriza la nueva importación
+            if fila["email"]:
+                docente.email = fila["email"]
+            if fila["ubicacion"]:
+                docente.departamento = fila["ubicacion"]
+            registros_importados += 1
+
+    db.commit()
+    return registros_importados

@@ -1,16 +1,14 @@
 $kind: http-request
 name: Importar Docentes desde PDF
 method: POST
-url: '{{base_url_docentes}}/docentes/importar'
+url: "{{base_url_docentes}}/docentes/importar"
 order: 1100
 headers:
-  - key: Authorization
-    value: 'Bearer {{auth_token}}'
-  - key: Content-Type
-    value: multipart/form-data
+  Authorization: Bearer {{auth_token}}
+  Content-Type: multipart/form-data
 body:
   type: formdata
   content:
-    - key: archivo
-      type: file
-      src: './fixtures/docentes-programacion.pdf'
+    - type: file
+      key: archivo
+      src: ./docs/personal_docente.pdf
