@@ -43,6 +43,34 @@ async def importar_docentes(
     )
 
 
+@router.post(
+    "/importar-directorio",
+    response_model=ImportacionResponse,
+    summary="Importar información adicional de Personal Docente desde PDF",
+    description=(
+        "Recibe el PDF del directorio de personal docente y extrae automáticamente "
+        "el correo electrónico y ubicación (departamento) para asociarlo al docente."
+    ),
+)
+async def importar_directorio_docentes(
+    archivo: UploadFile = File(..., description="PDF de directorio de personal docente"),
+    db: Session = Depends(get_db),
+):
+    if not archivo.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Solo se aceptan archivos PDF")
+
+    contenido = await archivo.read()
+    try:
+        total = docentes_service.importar_directorio_docentes_pdf(contenido, db)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Error al procesar el PDF del directorio: {exc}")
+
+    return ImportacionResponse(
+        mensaje="Importación del directorio docente completada",
+        registros_importados=total,
+    )
+
+
 @router.get(
     "/",
     response_model=List[DocenteResponse],

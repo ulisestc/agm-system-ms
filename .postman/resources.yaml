@@ -12,3 +12,7 @@ localResources:
     - ../microservices/ms-asistencias/asistencias.proto
     - ../proto/auth.proto
     - ../proto/calificaciones.proto
+  docs:
+    - ..\microservices\README.md
+    - ..\README.md
+DME.md
