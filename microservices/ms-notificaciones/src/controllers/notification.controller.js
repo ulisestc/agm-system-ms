@@ -37,7 +37,7 @@ class NotificationController {
             html: `
                 <h2>Hola ${alumnoNombre}</h2>
                 <p>Tu registro en la materia <b>${materiaNombre}</b> ha sido exitoso.</p>
-                <p>Tu clave única de acceso al sistema es: <b>AGM-${claveUnica}</b></p>
+                <p>Tu clave única de acceso al sistema es: <b>${claveUnica}</b></p>
                 <p>Por favor, ingresa al portal para cambiarla.</p>
             `
         };

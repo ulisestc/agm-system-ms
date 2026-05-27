@@ -123,12 +123,53 @@ class AuthRpcHandlers:
         finally:
             db.close()
 
+    def create_user(self, data):
+        email = data.get("email")
+        password = data.get("password")
+        rol = data.get("rol", "Alumno")
+        
+        db = SessionLocal()
+        try:
+            # Importar localmente para evitar circulares si las hubiera
+            import main 
+            
+            db_user = db.query(models.Usuario).filter(models.Usuario.email == email).first()
+            if db_user:
+                return {
+                    "success": False,
+                    "error_message": "Este correo ya esta registrado",
+                }
+
+            nuevo_usuario = models.Usuario(
+                email=email,
+                password_hash=main.get_password_hash(password),
+                rol=_normalize_role(rol),
+            )
+
+            db.add(nuevo_usuario)
+            db.commit()
+            db.refresh(nuevo_usuario)
+
+            return {
+                "success": True,
+                "user": _to_user_dict(nuevo_usuario),
+            }
+        except Exception as e:
+            db.rollback()
+            return {
+                "success": False,
+                "error_message": str(e),
+            }
+        finally:
+            db.close()
+
 def serve():
     handlers = AuthRpcHandlers()
     server = RabbitMQRpcServer(queue_name='rpc_auth_queue')
     server.register_action('validate_token', handlers.validate_token)
     server.register_action('get_user_by_id', handlers.get_user_by_id)
     server.register_action('check_role', handlers.check_role)
+    server.register_action('create_user', handlers.create_user)
     print("--> [RPC] Servidor Auth iniciado en rpc_auth_queue", flush=True)
     server.start()
 

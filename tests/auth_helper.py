@@ -1,7 +1,7 @@
 import requests
 
-GATEWAY_URL = "http://localhost"
-AUTH_URL = f"{GATEWAY_URL}/api/auth"
+GATEWAY_URL = "https://agm-system-ms-production.up.railway.app"
+AUTH_URL = f"{GATEWAY_URL}/auth"
 
 def get_token(email="docente@buap.mx", password="password123", role="Docente"):
     """Obtiene un token de acceso para un usuario."""
