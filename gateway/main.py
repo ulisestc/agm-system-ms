@@ -21,8 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mapeo de prefijos a hosts (desde variables de entorno)
-# Formato esperado: ms-auth (sin puerto, se añade :8000 etc)
+# Mapeo de prefijos a hosts
 SERVICES = {
     "auth": {"host": os.getenv("MS_AUTH_HOST"), "port": 8000},
     "periodos": {"host": os.getenv("MS_PERIODOS_HOST"), "port": 8000},
@@ -36,35 +35,29 @@ client = httpx.AsyncClient()
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "message": "Gateway is up and running (FastAPI)"}
+    return {"status": "ok", "message": "Gateway FastAPI is RUNNING", "port": os.getenv("PORT", "80")}
 
 @app.api_route("/{service}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
 async def proxy(request: Request, service: str, path: str):
     if service not in SERVICES:
-        raise HTTPException(status_code=404, detail=f"Servicio '{service}' no encontrado en el Gateway")
+        raise HTTPException(status_code=404, detail=f"Servicio '{service}' no encontrado")
 
     service_config = SERVICES[service]
     target_host = service_config["host"]
     target_port = service_config["port"]
 
     if not target_host:
-        raise HTTPException(status_code=502, detail=f"Configuración de host faltante para el servicio: {service}")
+        raise HTTPException(status_code=502, detail=f"Host faltante para: {service}")
 
-    # Construir la URL de destino
-    # Eliminamos el prefijo /api si viene en la URL original
     url = f"http://{target_host}:{target_port}/{path}"
-    
-    # Capturar query params
     if request.query_params:
         url += f"?{request.query_params}"
 
-    print(f"--> [Proxy] {request.method} {request.url.path} -> {url}")
+    print(f"--> [Proxy] {request.method} /{service}/{path} -> {url}")
 
     try:
-        # Reenviar la petición
         content = await request.body()
         headers = dict(request.headers)
-        # Eliminar el host original para evitar problemas de proxy
         headers.pop("host", None)
 
         response = await client.request(
@@ -72,7 +65,7 @@ async def proxy(request: Request, service: str, path: str):
             url=url,
             content=content,
             headers=headers,
-            timeout=10.0
+            timeout=15.0
         )
 
         return Response(
@@ -80,10 +73,6 @@ async def proxy(request: Request, service: str, path: str):
             status_code=response.status_code,
             headers=dict(response.headers)
         )
-    except httpx.RequestError as exc:
-        print(f"!! [Proxy Error] {exc}")
-        raise HTTPException(status_code=502, detail=f"Error conectando al microservicio {service}: {str(exc)}")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=80)
+    except Exception as e:
+        print(f"!! [Proxy Error] {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Error conectando a {service}: {str(e)}")
