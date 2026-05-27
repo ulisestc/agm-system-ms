@@ -1,10 +1,19 @@
-# 🚪 API Gateway (Puerta de Enlace)
+# API Gateway
 
-El **API Gateway** es el componente crítico que actúa como el único punto de entrada para todos los clientes externos, desacoplando la complejidad de nuestra arquitectura de microservicios del mundo exterior.
+El API Gateway es el punto de entrada centralizado para todas las solicitudes de clientes externos hacia el ecosistema de microservicios de AGM.
 
-### Responsabilidades Críticas
-1. **Traducción de Protocolos:** Su función principal es recibir peticiones **HTTP/REST** desde el frontend y traducirlas a llamadas **gRPC** de alto rendimiento hacia los microservicios internos.
-2. **Seguridad y Autorización:** Centraliza la validación de tokens JWT. Antes de que una petición llegue a servicios sensibles como `ms-calificaciones`, el Gateway verifica la identidad y los permisos del usuario consultando a `ms-auth`.
-3. **Enrutamiento Inteligente:** Dirige el tráfico al microservicio correcto basándose en la URL de la petición, permitiendo que la red interna de microservicios permanezca oculta y protegida.
-4. **Agregación de Respuestas:** En ciertos endpoints, el Gateway puede consultar múltiples microservicios (ej. juntar datos de materias y calificaciones) para entregar una respuesta unificada, reduciendo el número de llamadas que debe hacer el cliente.
-5. **Políticas de Tráfico:** Implementa Rate Limiting y Logging centralizado para proteger el sistema contra abusos y facilitar la auditoría de peticiones.
+## Responsabilidades Principales
+
+- **Enrutamiento de Solicitudes:** Dirige el tráfico entrante hacia el microservicio correspondiente basándose en el prefijo de la URL.
+- **Gestión de CORS:** Centraliza las políticas de Cross-Origin Resource Sharing para permitir la comunicación segura con las aplicaciones cliente.
+- **Abstracción de Red:** Oculta la topología de la red interna de microservicios, exponiendo una interfaz unificada.
+- **Validación de Salud:** Implementa endpoints de health check para monitorear el estado operativo de la puerta de enlace.
+
+## Configuración y Ejecución
+
+1.  Asegúrese de definir las variables de entorno para los hosts de cada microservicio (ej. `MS_AUTH_HOST`, `MS_DOCENTES_HOST`).
+2.  Instale las dependencias necesarias: `pip install -r requirements.txt`
+3.  Inicie el servicio mediante Uvicorn: `uvicorn main:app --port 80`
+
+## Arquitectura
+En entornos de producción, el Gateway utiliza una combinación de Nginx para el manejo eficiente de conexiones y FastAPI para la lógica de proxy dinámico.
