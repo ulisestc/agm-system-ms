@@ -1,0 +1,57 @@
+server {
+    listen 80;
+
+    # ms-1 auth    
+    location /api/auth/ {
+        proxy_pass http://${MS_AUTH_HOST}:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # ms-2 periodos materias
+    location /api/periodos/ {
+        proxy_pass http://${MS_PERIODOS_HOST}:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # ms-3 docentes alumnos
+    location /api/docentes/ {
+        proxy_pass http://${MS_DOCENTES_HOST}:8003/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # 5. ms-4 calificaciones
+    location /api/calificaciones/ {
+        proxy_pass http://${MS_CALIFICACIONES_HOST}:8004/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # ms-5 asistencias
+    location /api/asistencias/ {
+        proxy_pass http://${MS_ASISTENCIAS_HOST}:8005/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # ms-7 reportes
+    location /api/reportes/ {
+        proxy_pass http://${MS_REPORTES_HOST}:8007/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Health check del Gateway
+    location /health {
+        return 200 'Gateway is up and running';
+        add_header Content-Type text/plain;
+    }
+}
