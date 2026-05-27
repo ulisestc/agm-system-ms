@@ -7,7 +7,5 @@ RUN npm install
 
 COPY microservices/ms-notificaciones/ .
 
-COPY proto/ /proto/
-
 EXPOSE 50056
 CMD ["npm", "start"]

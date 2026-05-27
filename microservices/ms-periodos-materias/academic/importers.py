@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import hashlib
 import re
 from dataclasses import dataclass
 
@@ -7,9 +9,26 @@ from pypdf import PdfReader
 from .models import Materia, Periodo
 
 
-SECTION_RE = re.compile(r"^(?:\d{1,3}[A-Za-z]?|[A-Za-z]{1,3}\d{1,3})$")
-CLAVE_RE = re.compile(r"^[A-Z]{2,10}-?\d{2,5}$")
-NRC_RE = re.compile(r"(?<!\d)(\d{4,6})(?!\d)")
+NRC_RE = re.compile(r"^\d{4,6}$")
+TIME_RE = re.compile(r"^\d{4}-\d{4}$")
+SECTION_RE = re.compile(r"^(?:O{2}\d{1,3}|\d{3}|[A-Z]{1,3}\d{1,3})$")
+HEADER_MARKERS = {
+    "SECRETARÍA ACADÉMICA",
+    "PROGRAMACIÓN ACADÉMICA",
+    "INGENIERÍA EN TECNOLOGÍAS DE LA INFORMACIÓN",
+    "PLAN SEMESTRAL",
+    "NRC",
+    "CLAVE",
+    "MATERIA",
+    "SECC",
+    "DÍAS",
+    "DIA",
+    "HORA",
+    "PROFESOR",
+    "SALÓN",
+    "SALON",
+}
+DAY_TOKENS = {"L", "M", "A", "J", "V", "S"}
 
 
 @dataclass
@@ -33,28 +52,63 @@ def extract_text_from_pdf(uploaded_file) -> str:
     return "\n".join(pages)
 
 
-def _split_columns(line: str) -> list[str]:
-    normalized = line.replace("|", " ")
-    parts = [part.strip() for part in re.split(r"\t+|\s{2,}", normalized) if part.strip()]
-    if len(parts) <= 1:
-        parts = [part.strip() for part in normalized.split() if part.strip()]
-    return parts
+def _normalize_line(line: str) -> str:
+    return re.sub(r"\s+", " ", line.strip())
 
 
-def _find_section_index(parts: list[str]) -> int | None:
-    for index, part in enumerate(parts[1:], start=1):
-        if SECTION_RE.match(part):
-            return index
-    return None
+def _is_header_line(line: str) -> bool:
+    upper = line.upper()
+    return any(marker in upper for marker in HEADER_MARKERS)
 
 
-def _extract_docente_id(docente_text: str, docente_id_default: int | None) -> int | None:
+def _looks_like_record_start(line: str) -> bool:
+    if not line:
+        return False
+    first_token = line.split(" ", 1)[0]
+    return bool(NRC_RE.match(first_token))
+
+
+def _is_section_token(token: str) -> bool:
+    return bool(SECTION_RE.match(token))
+
+
+def _is_time_token(token: str) -> bool:
+    return bool(TIME_RE.match(token))
+
+
+def _is_day_token(token: str) -> bool:
+    return token in DAY_TOKENS
+
+
+def _is_salon_token(token: str) -> bool:
+    if not token:
+        return False
+    upper = token.upper()
+    return (
+        upper in {"POR", "ASIGNAR", "MATERIA", "CRUZADA", "CON", "NRC"}
+        or token[0].isdigit()
+    )
+
+
+def _fallback_docente_id(docente_text: str) -> int:
+    digest = hashlib.sha1(docente_text.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % 2_000_000_000 or 1
+
+
+def _extract_docente_id(docente_text: str, docente_id_default: int | None) -> int:
     match = re.search(r"(\d+)", docente_text)
     if match:
         value = int(match.group(1))
         if value > 0:
             return value
-    return docente_id_default
+
+    if docente_id_default is not None:
+        return docente_id_default
+
+    cleaned = docente_text.strip()
+    if cleaned:
+        return _fallback_docente_id(cleaned)
+    return 1
 
 
 def _clean_docente_nombre(docente_text: str) -> str:
@@ -62,60 +116,72 @@ def _clean_docente_nombre(docente_text: str) -> str:
     return re.sub(r"\s{2,}", " ", cleaned)
 
 
-def parse_materia_line(line: str, docente_id_default: int | None = None) -> ImportRow | None:
-    raw = line.strip()
-    if not raw:
-        return None
+def _split_record_blocks(text: str) -> list[str]:
+    blocks: list[str] = []
+    current: list[str] = []
 
-    upper = raw.upper()
-    if any(keyword in upper for keyword in {"NRC", "MATERIA", "SECCION", "SECCIÓN", "DOCENTE", "HORARIO"}):
-        return None
-
-    nrc_match = NRC_RE.search(raw)
-    if not nrc_match:
-        return None
-
-    parts = _split_columns(raw)
-    if len(parts) < 3:
-        return None
-
-    if parts[0] != nrc_match.group(1):
-        # Normaliza el NRC al inicio para evitar formatos mixtos.
-        parts = [nrc_match.group(1)] + [part for part in parts if part != nrc_match.group(1)]
-
-    nrc = parts[0]
-    section_index = _find_section_index(parts)
-
-    if section_index is None and len(parts) >= 5:
-        section_index = 2
-
-    if section_index is None or section_index + 1 >= len(parts):
-        return None
-
-    nombre_chunks = parts[1:section_index]
-    clave = ""
-    filtered_nombre_chunks = []
-    for chunk in nombre_chunks:
-        if not clave and CLAVE_RE.match(chunk):
-            clave = chunk
+    for raw_line in text.splitlines():
+        line = _normalize_line(raw_line)
+        if not line or _is_header_line(line):
             continue
-        filtered_nombre_chunks.append(chunk)
 
-    nombre = " ".join(filtered_nombre_chunks).strip() or parts[1].strip()
-    seccion = parts[section_index].strip()
+        if _looks_like_record_start(line):
+            if current:
+                blocks.append(" ".join(current))
+            current = [line]
+        elif current:
+            current.append(line)
 
-    docente_chunk = parts[section_index + 1].strip() if section_index + 1 < len(parts) else ""
-    horario_chunks = parts[section_index + 2 :] if section_index + 2 < len(parts) else []
-    horario = " ".join(horario_chunks).strip()
+    if current:
+        blocks.append(" ".join(current))
 
-    docente_id = _extract_docente_id(docente_chunk, docente_id_default)
-    if docente_id is None:
+    return blocks
+
+
+def _parse_record_block(block: str, docente_id_default: int | None = None) -> ImportRow | None:
+    tokens = block.split()
+    if len(tokens) < 8:
         return None
 
-    docente_nombre = _clean_docente_nombre(docente_chunk) or docente_chunk
-    if not horario and len(parts) > section_index + 1:
-        # Si el formato vino comprimido, al menos intenta conservar el resto del texto.
-        horario = " ".join(parts[section_index + 1 :]).strip()
+    if not NRC_RE.match(tokens[0]):
+        return None
+
+    nrc = tokens[0]
+
+    if len(tokens) >= 3 and tokens[2].isdigit():
+        clave = f"{tokens[1]} {tokens[2]}"
+        cursor = 3
+    else:
+        clave = tokens[1] if len(tokens) > 1 else ""
+        cursor = 2
+
+    section_index = None
+    for index in range(cursor, len(tokens)):
+        if _is_section_token(tokens[index]):
+            section_index = index
+            break
+    if section_index is None or section_index + 2 >= len(tokens):
+        return None
+
+    nombre = " ".join(tokens[cursor:section_index]).strip()
+    if not nombre:
+        return None
+
+    seccion = tokens[section_index]
+    day_token = tokens[section_index + 1]
+    time_token = tokens[section_index + 2]
+    if not _is_day_token(day_token) or not _is_time_token(time_token):
+        return None
+
+    remaining = tokens[section_index + 3 :]
+    professor_tokens: list[str] = []
+    for token in remaining:
+        if _is_salon_token(token):
+            break
+        professor_tokens.append(token)
+
+    docente_nombre = _clean_docente_nombre(" ".join(professor_tokens)) or "POR ASIGNAR"
+    docente_id = _extract_docente_id(docente_nombre, docente_id_default)
 
     return ImportRow(
         nrc=nrc,
@@ -124,17 +190,33 @@ def parse_materia_line(line: str, docente_id_default: int | None = None) -> Impo
         clave=clave,
         docente_id=docente_id,
         docente_nombre=docente_nombre,
-        horario=horario,
+        horario=f"{day_token} {time_token}",
     )
 
 
 def parse_materia_rows(text: str, docente_id_default: int | None = None) -> list[ImportRow]:
-    rows: list[ImportRow] = []
-    for line in text.splitlines():
-        row = parse_materia_line(line, docente_id_default=docente_id_default)
-        if row:
-            rows.append(row)
-    return rows
+    aggregated: dict[str, ImportRow] = {}
+
+    for block in _split_record_blocks(text):
+        row = _parse_record_block(block, docente_id_default=docente_id_default)
+        if not row:
+            continue
+
+        existing = aggregated.get(row.nrc)
+        if existing is None:
+            aggregated[row.nrc] = row
+            continue
+
+        existing_horarios = existing.horario.split(" ; ") if existing.horario else []
+        if row.horario not in existing_horarios:
+            existing_horarios.append(row.horario)
+        existing.horario = " ; ".join([item for item in existing_horarios if item])
+        if not existing.docente_nombre or existing.docente_nombre == "POR ASIGNAR":
+            existing.docente_nombre = row.docente_nombre
+        if not existing.docente_id:
+            existing.docente_id = row.docente_id
+
+    return list(aggregated.values())
 
 
 def import_materias_from_text(
@@ -192,7 +274,11 @@ def import_materias_from_pdf(
     periodo_id: int,
     docente_id_default: int | None = None,
 ) -> dict:
-    if hasattr(uploaded_file, 'seek'):
+    if hasattr(uploaded_file, "seek"):
         uploaded_file.seek(0)
     text = extract_text_from_pdf(uploaded_file)
-    return import_materias_from_text(text, periodo_id=periodo_id, docente_id_default=docente_id_default)
+    return import_materias_from_text(
+        text,
+        periodo_id=periodo_id,
+        docente_id_default=docente_id_default,
+    )
