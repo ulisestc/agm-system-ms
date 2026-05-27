@@ -48,6 +48,10 @@ values:
     value: 'http://localhost/api/periodos'
     enabled: true
     type: default
+  - key: base_url_calificaciones
+    value: 'http://localhost/api/calificaciones'
+    enabled: true
+    type: default
   - key: base_url_notificaciones_grpc
     value: 'localhost:50056'
     enabled: true

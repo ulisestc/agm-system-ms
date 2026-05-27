@@ -1,0 +1,8 @@
+$kind: http-request
+name: Actualizar Ponderación
+method: PUT
+url: '{{base_url_calificaciones}}/ponderaciones/{{actividad_id}}?nueva_ponderacion=35'
+order: 9000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

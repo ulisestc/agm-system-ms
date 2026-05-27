@@ -1,3 +1,4 @@
+from __future__ import annotations
 import re
 from dataclasses import dataclass
 
@@ -191,5 +192,7 @@ def import_materias_from_pdf(
     periodo_id: int,
     docente_id_default: int | None = None,
 ) -> dict:
+    if hasattr(uploaded_file, 'seek'):
+        uploaded_file.seek(0)
     text = extract_text_from_pdf(uploaded_file)
     return import_materias_from_text(text, periodo_id=periodo_id, docente_id_default=docente_id_default)

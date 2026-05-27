@@ -23,10 +23,17 @@ app = FastAPI(
 
 event_publisher = RabbitMQManager()
 
+origins = [
+    "https://agm-system-frontend-joselyn-agm.vercel.app",
+    "https://agm-system-frontend-30ytwlq1y-joselyn-agm.vercel.app",
+    "https://agm-system-frontend.vercel.app",
+    "http://localhost:4200",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

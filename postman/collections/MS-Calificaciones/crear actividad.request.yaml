@@ -1,0 +1,18 @@
+$kind: http-request
+name: Crear Actividad
+method: POST
+url: '{{base_url_calificaciones}}/actividades'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "materia_id": "{{materia_id}}",
+      "nombre": "Examen Parcial 1",
+      "ponderacion": 30
+    }
