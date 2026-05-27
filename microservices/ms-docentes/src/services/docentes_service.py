@@ -344,6 +344,18 @@ def listar_docentes(db: Session) -> List[models.Docente]:
     return db.query(models.Docente).all()
 
 
+def buscar_docentes(db: Session, search: str | None = None) -> List[models.Docente]:
+    query = db.query(models.Docente)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            (models.Docente.nombre.ilike(like))
+            | (models.Docente.email.ilike(like))
+            | (models.Docente.departamento.ilike(like))
+        )
+    return query.order_by(models.Docente.nombre).all()
+
+
 # ── Importación del Directorio "Personal Docente" ─────────────────────────────
 def _parsear_pagina_directorio(pagina) -> List[dict]:
     """

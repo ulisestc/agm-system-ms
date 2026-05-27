@@ -25,7 +25,9 @@ class MateriaDocenteResponse(BaseModel):
 class DocenteResponse(BaseModel):
     id: int
     nombre: str
+    apellido: Optional[str] = None
     email: Optional[str] = None
+    clave_empleado: Optional[str] = None
     departamento: Optional[str] = None
     materias: List[MateriaDocenteResponse] = []
 
@@ -45,8 +47,10 @@ class ImportacionResponse(BaseModel):
 
 class AlumnoResponse(BaseModel):
     id: int
+    numero_registro: Optional[int] = None
     matricula: str
     nombre: str
+    apellido: Optional[str] = None
     email: Optional[str] = None
     nrc: str
     activo: bool

@@ -52,6 +52,7 @@ class Alumno(Base):
     __tablename__ = "alumnos"
 
     id          = Column(Integer, primary_key=True, index=True)
+    numero_registro = Column(Integer, nullable=True)
     matricula   = Column(String(20), nullable=False, index=True)   # búsquedas por matrícula
     nombre      = Column(String(200), nullable=False)
     email       = Column(String(200), nullable=True)

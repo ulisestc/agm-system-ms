@@ -16,6 +16,19 @@ from auth_middleware import get_current_user_rpc
 router = APIRouter(prefix="/alumnos", tags=["Alumnos"], dependencies=[Depends(get_current_user_rpc)])
 
 
+def _alumno_dict(alumno: models.Alumno) -> dict:
+    return {
+        "id": alumno.id,
+        "numero_registro": alumno.numero_registro,
+        "matricula": alumno.matricula,
+        "nombre": alumno.nombre,
+        "apellido": "",
+        "email": alumno.email,
+        "nrc": alumno.nrc,
+        "activo": alumno.activo,
+    }
+
+
 @router.post(
     "/importar/{materiaId}",
     response_model=ImportacionResponse,
@@ -28,10 +41,14 @@ router = APIRouter(prefix="/alumnos", tags=["Alumnos"], dependencies=[Depends(ge
 )
 async def importar_alumnos(
     materiaId: str = Path(..., description="NRC de la materia"),
-    archivo: UploadFile = File(..., description="Archivo PDF con la lista de alumnos"),
+    archivo: UploadFile = File(None, description="Archivo PDF con la lista de alumnos"),
+    file: UploadFile = File(None, description="Alias usado por algunos frontends"),
     db: Session = Depends(get_db),
     authorization: Optional[str] = Header(None)
 ):
+    archivo = archivo or file
+    if archivo is None:
+        raise HTTPException(status_code=400, detail="Se requiere un archivo PDF")
     if not archivo.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos PDF (.pdf)")
 
@@ -57,6 +74,58 @@ async def importar_alumnos(
         mensaje=f"Importación de alumnos para NRC {materiaId} completada",
         registros_importados=len(alumnos_nuevos),
     )
+
+
+@router.post(
+    "/importar/",
+    response_model=ImportacionResponse,
+    summary="Importar lista de alumnos desde PDF detectando el NRC",
+)
+async def importar_alumnos_auto(
+    archivo: UploadFile = File(None, description="Archivo PDF con la lista de alumnos"),
+    file: UploadFile = File(None, description="Alias usado por algunos frontends"),
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None),
+):
+    archivo = archivo or file
+    if archivo is None:
+        raise HTTPException(status_code=400, detail="Se requiere un archivo PDF")
+    if not archivo.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Solo se aceptan archivos PDF (.pdf)")
+
+    contenido = await archivo.read()
+    materiaId = alumnos_service._extraer_nrc_desde_pdf(contenido)
+    if not materiaId:
+        raise HTTPException(status_code=422, detail="No se pudo detectar el NRC dentro del PDF")
+
+    alumnos_nuevos = alumnos_service.importar_alumnos_desde_pdf(contenido, materiaId, db)
+    if alumnos_nuevos:
+        token = authorization.replace("Bearer ", "") if authorization else "no-token"
+        materia = db.query(models.MateriaDocente).filter(models.MateriaDocente.nrc == materiaId).first()
+        materia_nombre = materia.nombre_materia if materia else f"NRC {materiaId}"
+
+        from src.notifications import send_bienvenida_notif
+        for alu in alumnos_nuevos:
+            alu_dict = {"id": alu.id, "nombre": alu.nombre, "email": alu.email, "matricula": alu.matricula}
+            send_bienvenida_notif(alu_dict, materia_nombre, token)
+
+    return ImportacionResponse(
+        mensaje=f"Importacion de alumnos para NRC {materiaId} completada",
+        registros_importados=len(alumnos_nuevos),
+    )
+
+
+@router.get(
+    "/",
+    summary="Listar alumnos activos",
+)
+def listar_todos_los_alumnos(
+    page: int = 1,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    alumnos = alumnos_service.listar_alumnos(db, search)
+    return {"count": len(alumnos), "next": None, "previous": None, "results": [_alumno_dict(a) for a in alumnos]}
 
 
 @router.get(
@@ -102,3 +171,16 @@ def dar_baja_alumno(
         alumno_id=alumno.id,
         nrc=alumno.nrc,
     )
+
+
+@router.delete(
+    "/{id}/",
+    response_model=BajaResponse,
+    summary="Dar de baja a un alumno de su materia",
+)
+def dar_baja_alumno_alias(
+    id: int = Path(..., description="ID del alumno en la BD"),
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None),
+):
+    return dar_baja_alumno(id=id, db=db, authorization=authorization)

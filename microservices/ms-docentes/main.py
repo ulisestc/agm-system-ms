@@ -7,6 +7,7 @@ import threading
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from database import engine, Base
 from src.controllers.docentes_controller import router as docentes_router
@@ -14,6 +15,8 @@ from src.controllers.alumnos_controller import router as alumnos_router
 
 # ── 1. Crear tablas en la BD si no existen ────────────────────────────────────
 Base.metadata.create_all(bind=engine)
+with engine.begin() as conn:
+    conn.execute(text("ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS numero_registro INTEGER"))
 
 # ── 2. Inicializar la aplicación FastAPI ─────────────────────────────────────
 app = FastAPI(
