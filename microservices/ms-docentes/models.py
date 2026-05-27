@@ -46,7 +46,7 @@ class MateriaDocente(Base):
 
 class Alumno(Base):
     """
-    Alumnos inscritos por materia, importados desde Excel.
+    Alumnos inscritos por materia, importados desde PDF.
     matrícula + nrc es la clave de negocio; se indexan ambos.
     """
     __tablename__ = "alumnos"
