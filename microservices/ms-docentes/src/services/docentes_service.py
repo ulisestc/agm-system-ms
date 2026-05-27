@@ -316,7 +316,7 @@ def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> int:
             # 1.1 Registrar en Auth con email genérico o temporal si no lo tiene aún
             username_part = re.sub(r'[^a-z0-9]', '', nombre_docente.lower())[:20]
             temp_email = f"{username_part}@docente.buap.mx"
-            temp_clave = f"AGM-{_generar_clave_unica()}"
+            temp_clave = "password123"
             
             rpc_client.call('rpc_auth_queue', 'create_user', {
                 "email": temp_email,
@@ -457,7 +457,7 @@ def importar_directorio_docentes_pdf(contenido: bytes, db: Session) -> int:
             continue
 
         email = fila["email"]
-        clave = _generar_clave_unica()
+        clave = "password123"
         nombre_norm = _normalizar_nombre(nombre_docente)
 
         # 1. Buscar el docente usando el nombre normalizado
@@ -483,7 +483,7 @@ def importar_directorio_docentes_pdf(contenido: bytes, db: Session) -> int:
         if email:
             rpc_client.call('rpc_auth_queue', 'create_user', {
                 "email": email,
-                "password": clave,
+                "password": "password123", # Password por defecto para docentes importados
                 "rol": "Docente"
             })
 
