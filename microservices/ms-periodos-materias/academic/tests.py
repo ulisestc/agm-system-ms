@@ -148,10 +148,10 @@ class MateriaAPITests(APITestCase):
             "/api/materias/importar/",
             {
                 "periodo_id": self.periodo.id,
-                "docente_id_default": 15,
                 "texto": (
-                    "12345  Servicios Web  001  10 Dra. Lopez  Lunes 10:00-12:00\n"
-                    "23456  Arquitectura de Software  002  11 Ing. Ruiz  Martes 12:00-14:00"
+                    "12345 ITIS 252 Servicios Web OO1 L 0800-0859 CASTILLO - AVILA ARLEM ALEIDA 1CCO2/207\n"
+                    "12345 ITIS 252 Servicios Web OO1 A 0700-0859 CASTILLO - AVILA ARLEM ALEIDA 1CCO2/207\n"
+                    "23456 ITIS 611 Arquitectura de Software OO2 M 1300-1459 GONZALEZ - FLORES MARCOS 1EMA5/205"
                 ),
             },
             format="json",
@@ -161,5 +161,9 @@ class MateriaAPITests(APITestCase):
         self.assertTrue(response.data["success"])
         self.assertEqual(response.data["data"]["created"], 2)
         self.assertEqual(Materia.objects.filter(periodo_id=self.periodo.id).count(), 2)
-        self.assertEqual(Materia.objects.get(nrc="12345").docente_id, 10)
-        self.assertEqual(Materia.objects.get(nrc="12345").docente_nombre, "Dra. Lopez")
+        materia = Materia.objects.get(nrc="12345")
+        self.assertEqual(materia.clave, "ITIS 252")
+        self.assertEqual(materia.nombre, "Servicios Web")
+        self.assertIn("L 0800-0859", materia.horario)
+        self.assertIn("A 0700-0859", materia.horario)
+        self.assertEqual(materia.docente_nombre, "CASTILLO - AVILA ARLEM ALEIDA")

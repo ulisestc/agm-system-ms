@@ -1,9 +1,10 @@
 from dataclasses import dataclass
+import os
+
+import jwt
 
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
-
-from academic.auth_client import validate_token
 
 
 @dataclass(frozen=True)
@@ -29,13 +30,16 @@ class AuthenticatedUser:
 
 class RabbitMQJWTAuthentication(BaseAuthentication):
     """
-    Autenticación DRF que valida el Bearer token llamando a ms-auth
-    via RabbitMQ RPC (rpc_auth_queue → validate_token).
+    Autenticación DRF que valida el Bearer token localmente usando la
+    misma SECRET_KEY con la que ms-auth firma los JWT.
 
     Si no hay header Authorization → retorna None (endpoint público).
     Si el token es inválido → lanza AuthenticationFailed.
-    Si es válido → retorna (user_dict, token).
+    Si es válido → retorna (user, token).
     """
+
+    secret_key = os.getenv("SECRET_KEY", "clave_super_secreta_desarrollo_agm")
+    algorithm = os.getenv("JWT_ALGORITHM", "HS256")
 
     def authenticate(self, request):
         auth_header = request.headers.get("Authorization", "")
@@ -46,18 +50,23 @@ class RabbitMQJWTAuthentication(BaseAuthentication):
         if not token:
             return None
 
-        result = validate_token(token)
-
-        if not result.get("valid"):
-            raise AuthenticationFailed(
-                result.get("error_message", "Token inválido o expirado.")
+        try:
+            payload = jwt.decode(
+                token,
+                self.secret_key,
+                algorithms=[self.algorithm],
             )
+        except jwt.ExpiredSignatureError as exc:
+            raise AuthenticationFailed("El token ha caducado.") from exc
+        except jwt.InvalidTokenError as exc:
+            raise AuthenticationFailed(
+                "Token inválido o expirado."
+            ) from exc
 
-        user_data = result.get("user") or {}
         user = AuthenticatedUser(
-            id=user_data.get("id"),
-            email=user_data.get("email"),
-            rol=user_data.get("rol"),
+            id=int(payload.get("sub")) if payload.get("sub") is not None else None,
+            email=payload.get("email"),
+            rol=payload.get("rol"),
         )
         return (user, token)
 

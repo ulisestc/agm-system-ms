@@ -38,7 +38,6 @@ class MateriaImportSerializer(serializers.Serializer):
     periodo_id = serializers.IntegerField(min_value=1)
     archivo = serializers.FileField(required=False, allow_null=True)
     texto = serializers.CharField(required=False, allow_blank=True)
-    docente_id_default = serializers.IntegerField(required=False, min_value=1)
 
     def validate(self, attrs):
         archivo = attrs.get("archivo")

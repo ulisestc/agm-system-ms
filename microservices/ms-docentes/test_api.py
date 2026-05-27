@@ -1,5 +1,4 @@
 import requests
-import openpyxl
 from io import BytesIO
 import sys
 import os
@@ -22,23 +21,8 @@ def main():
         print(f"Error conectando al servidor REST: {e}")
         return
 
-    # 2. Crear un archivo Excel en memoria para importar alumnos
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.append(["Matricula", "Nombre", "Email", "NRC"])
-    ws.append(["202010101", "Juan Perez", "juan@test.com", NRC_TEST])
-    ws.append(["202010102", "Maria Gomez", "maria@test.com", NRC_TEST])
-
-    excel_file = BytesIO()
-    wb.save(excel_file)
-    excel_file.seek(0)
-
-    # 3. Probar POST /alumnos/importar/{nrc}
-    print(f"\n--- Probando Importación de Excel para NRC {NRC_TEST} ---")
-    files = {"archivo": ("alumnos.xlsx", excel_file, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
-    res = requests.post(f"{BASE_URL}/alumnos/importar/{NRC_TEST}", files=files)
-    print(f"Status: {res.status_code}")
-    print(f"Respuesta: {res.json()}")
+    # 2. (La importación de alumnos ahora requiere un PDF real con formato BUAP,
+    # por lo que se omite la prueba de carga automática en este script básico)
 
     # 4. Probar GET /alumnos/materia/{nrc}
     print(f"\n--- Probando Listar Alumnos del NRC {NRC_TEST} ---")
@@ -49,7 +33,7 @@ def main():
     
     # Obtener el ID del primer alumno insertado
     if not alumnos:
-        print("No se importaron alumnos.")
+        print("No hay alumnos en esta materia para probar RPC y baja.")
         return
         
     alumno_id = str(alumnos[0]['id'])

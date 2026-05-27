@@ -1,12 +1,13 @@
-# 💻 Frontend (Angular 20)
+# Interfaz de Usuario (Frontend)
 
-Esta carpeta contiene la capa de presentación de **AGM-Systems**, una Single Page Application (SPA) robusta construida con el framework **Angular 20**.
+Capa de presentación del sistema AGM, desarrollada como una Single Page Application (SPA) para ofrecer una experiencia interactiva a los diferentes actores académicos.
 
-### Propósito en el Ecosistema
-El frontend es el consumidor principal de los servicios académicos. Su diseño está orientado a ofrecer una experiencia fluida y reactiva para administradores, profesores y alumnos.
+## Características del Diseño
 
-### Especificaciones de Diseño
-- **Comunicación Desacoplada:** El frontend nunca se comunica directamente con los microservicios. Todas las interacciones pasan por el **API Gateway** mediante REST, lo que permite cambiar la infraestructura interna sin romper la interfaz de usuario.
-- **Modularidad por Dominio:** La aplicación está dividida en módulos que reflejan los microservicios (Módulo de Calificaciones, Módulo de Asistencia, etc.), facilitando el mantenimiento y la carga perezosa (Lazy Loading) para mejorar el rendimiento.
-- **Seguridad en el Cliente:** Implementa interceptores para adjuntar automáticamente tokens de seguridad y manejar errores de sesión de forma centralizada.
-- **Visualización de Datos:** Especializado en la representación de datos académicos complejos, utilizando componentes dinámicos para boletas, listas y gráficos de rendimiento escolar.
+- **Arquitectura Basada en Componentes:** Desarrollado sobre Angular, permitiendo la reutilización de elementos de interfaz y una lógica desacoplada.
+- **Consumo de API Centralizado:** La comunicación se realiza exclusivamente a través del API Gateway, evitando dependencias directas con los microservicios internos.
+- **Gestión de Sesiones:** Implementación de interceptores JWT para la gestión automática de la autenticación en cada solicitud.
+- **Diseño Responsivo:** Interfaz adaptada para su uso en múltiples dispositivos, facilitando el acceso a docentes y alumnos desde entornos móviles y de escritorio.
+
+## Integración
+El frontend depende de las variables de entorno definidas en el archivo de configuración para apuntar correctamente a la URL del Gateway en entornos de desarrollo o producción.

@@ -5,39 +5,254 @@ Separada del controlador para mantener la responsabilidad única.
 """
 import pdfplumber
 from io import BytesIO
+import re
+import logging
 from typing import List
 from sqlalchemy.orm import Session
 
 import models
 
+logger = logging.getLogger(__name__)
 
-# ── Utilidad interna: parsea una sola página del PDF ──────────────────────────
+
+def _es_bloque_inicio(linea: str) -> bool:
+    return bool(re.match(r"^\d{5}\s+", linea or ""))
+
+
+def _es_salon(token: str) -> bool:
+    token = token.strip()
+    if not token:
+        return False
+    if token.upper() == "ASIGNAR":
+        return True
+    return any(ch.isdigit() for ch in token) and "/" in token
+
+
+def _limpiar_texto(texto: str) -> str:
+    return re.sub(r"\s+", " ", texto or "").strip()
+
+
+def _recortar_ruido(texto: str) -> str:
+    texto = _limpiar_texto(texto)
+    if not texto:
+        return ""
+    for patron in ("MATERIA CRUZADA", "CON NRC"):
+        indice = texto.upper().find(patron)
+        if indice != -1:
+            texto = texto[:indice].strip()
+    return _limpiar_texto(texto)
+
+
+def _es_seccion(token: str) -> bool:
+    return bool(re.fullmatch(r"(?:OO\d+|\d{3})", token or ""))
+
+
+def _es_dia(token: str) -> bool:
+    return token in {"L", "M", "A", "J", "V", "S"}
+
+
+def _es_hora(token: str) -> bool:
+    return bool(re.fullmatch(r"\d{4}-\d{4}", token or ""))
+
+
+def _es_linea_docente(texto: str) -> bool:
+    texto = _recortar_ruido(texto)
+    if not texto:
+        return False
+    if any(ch.isdigit() for ch in texto):
+        return False
+    if "/" in texto:
+        return False
+    if "CON NRC" in texto.upper() or "MATERIA CRUZADA" in texto.upper():
+        return False
+    return bool(re.fullmatch(r"[A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ\s\-\.]+", texto))
+
+
+def _extraer_docente_y_salon(resto: str, extras: List[str]) -> tuple[str, str]:
+    docente_partes: List[str] = []
+    salon = ""
+
+    texto = _recortar_ruido(resto)
+    if texto:
+        tokens = texto.split()
+        indice_salon = next(
+            (i for i, token in enumerate(tokens) if _es_salon(token)),
+            None,
+        )
+        if indice_salon is None:
+            docente_partes.append(texto)
+        else:
+            docente_fragmento = _limpiar_texto(" ".join(tokens[:indice_salon]))
+            if docente_fragmento:
+                docente_partes.append(docente_fragmento)
+            salon_fragmento = _limpiar_texto(" ".join(tokens[indice_salon:]))
+            if salon_fragmento:
+                salon = salon_fragmento
+
+    for linea in extras:
+        texto_original = _limpiar_texto(linea)
+        if not texto_original:
+            continue
+        if "MATERIA CRUZADA" in texto_original.upper():
+            continue
+
+        texto = _recortar_ruido(texto_original)
+        if not texto:
+            continue
+
+        if _es_linea_docente(texto):
+            docente_partes.append(texto)
+            continue
+
+        tokens = texto.split()
+        indice_salon = next(
+            (i for i, token in enumerate(tokens) if _es_salon(token)),
+            None,
+        )
+        if indice_salon is not None:
+            if not salon:
+                salon = _limpiar_texto(" ".join(tokens[indice_salon:]))
+            docente_fragmento = _limpiar_texto(" ".join(tokens[:indice_salon]))
+            if docente_fragmento and _es_linea_docente(docente_fragmento):
+                docente_partes.append(docente_fragmento)
+
+    docente = _limpiar_texto(" ".join(docente_partes))
+    salon = _limpiar_texto(salon)
+    return docente, salon
+
+
+def _parsear_linea_materia(linea: str) -> dict | None:
+    """
+    Convierte una línea de programación académica en una fila estructurada.
+    Formato esperado:
+      NRC CLAVE MATERIA SECCION DIA HORA [DOCENTE...] [SALON...]
+    """
+    tokens = _limpiar_texto(linea).split()
+    if len(tokens) < 7:
+        return None
+    if not tokens[0].isdigit() or len(tokens[0]) != 5:
+        return None
+
+    idx = 1
+    if idx + 1 >= len(tokens):
+        return None
+
+    if not tokens[idx].isalpha() or not re.fullmatch(r"\d{3}", tokens[idx + 1]):
+        return None
+
+    clave = f"{tokens[idx]} {tokens[idx + 1]}"
+    idx += 2
+
+    try:
+        seccion_idx = next(i for i in range(idx, len(tokens)) if _es_seccion(tokens[i]))
+    except StopIteration:
+        return None
+
+    nombre_materia = _limpiar_texto(" ".join(tokens[idx:seccion_idx]))
+    if not nombre_materia:
+        return None
+
+    if seccion_idx + 2 >= len(tokens):
+        return None
+
+    dia = tokens[seccion_idx + 1]
+    hora = tokens[seccion_idx + 2]
+    if not _es_dia(dia) or not _es_hora(hora):
+        return None
+
+    resto = " ".join(tokens[seccion_idx + 3:])
+    return {
+        "nrc": tokens[0],
+        "clave": clave,
+        "nombre_materia": nombre_materia,
+        "seccion": tokens[seccion_idx],
+        "dia": dia,
+        "hora": hora,
+        "resto": resto,
+        "extras": [],
+    }
+
+
 def _parsear_pagina(pagina) -> List[dict]:
     """
-    Extrae filas de la tabla 'Programación Académica' de una página del PDF.
-    El PDF de BUAP suele tener columnas en este orden:
-      NRC | Clave | Nombre Materia | Sección | Docente | Horario
-    Ajusta los índices si el PDF de tu institución es diferente.
+    Parsea una página del PDF oficial BUAP usando líneas de texto.
+    El formato real suele ser:
+      NRC Clave Materia Secc Día Hora
+      [líneas con el nombre del profesor]
+      [línea con el salón]
     """
+    texto = pagina.extract_text() or ""
+    lineas = [linea.strip() for linea in texto.split("\n") if linea.strip()]
+
     registros = []
-    tablas = pagina.extract_tables()
-    for tabla in tablas:
-        for fila in tabla:
-            # Filtramos filas vacías o encabezados
-            if not fila or not fila[0]:
-                continue
-            nrc = str(fila[0]).strip()
-            if not nrc.isdigit():          # los NRC son numéricos
-                continue
-            registros.append({
-                "nrc":            nrc,
-                "clave":          str(fila[1]).strip() if len(fila) > 1 else "",
-                "nombre_materia": str(fila[2]).strip() if len(fila) > 2 else "",
-                "seccion":        str(fila[3]).strip() if len(fila) > 3 else "",
-                "docente_nombre": str(fila[4]).strip() if len(fila) > 4 else "",
-                "horario":        str(fila[5]).strip() if len(fila) > 5 else "",
-            })
+    registro_actual = None
+
+    for linea in lineas:
+        linea_normalizada = _limpiar_texto(linea)
+        if registro_actual and (
+            "MATERIA CRUZADA" in linea_normalizada.upper()
+            or "CON NRC" in linea_normalizada.upper()
+        ):
+            registros.extend(_finalizar_registro(registro_actual))
+            registro_actual = None
+            continue
+
+        posible_registro = _parsear_linea_materia(linea)
+        if posible_registro:
+            if registro_actual:
+                registros.extend(_finalizar_registro(registro_actual))
+            registro_actual = posible_registro
+            continue
+
+        if registro_actual:
+            registro_actual["extras"].append(linea)
+
+    if registro_actual:
+        registros.extend(_finalizar_registro(registro_actual))
+
     return registros
+
+
+def _finalizar_registro(registro: dict) -> List[dict]:
+    docente_nombre, salon = _extraer_docente_y_salon(
+        registro.get("resto", ""),
+        registro.get("extras", []),
+    )
+
+    if not docente_nombre:
+        logger.warning(
+            "No se pudo detectar docente para NRC %s (%s)",
+            registro.get("nrc"),
+            registro.get("nombre_materia"),
+        )
+        return []
+
+    if len(docente_nombre) > 200:
+        logger.warning(
+            "Docente demasiado largo para NRC %s, se truncará: %s",
+            registro.get("nrc"),
+            docente_nombre,
+        )
+        docente_nombre = docente_nombre[:200].strip()
+
+    if docente_nombre and " " not in docente_nombre and not registro.get("extras"):
+        logger.warning(
+            "Docente muy corto o incompleto para NRC %s: %s",
+            registro.get("nrc"),
+            docente_nombre,
+        )
+
+    return [
+        {
+            "nrc": registro["nrc"],
+            "clave": registro["clave"],
+            "nombre_materia": registro["nombre_materia"],
+            "seccion": registro["seccion"],
+            "docente_nombre": docente_nombre,
+            "horario": f"{registro['dia']} {registro['hora']}",
+            "salon": salon,
+        }
+    ]
 
 
 def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> int:
@@ -56,7 +271,30 @@ def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> int:
         for pagina in pdf.pages:
             filas.extend(_parsear_pagina(pagina))
 
+    agrupados: dict[tuple[str, str, str, str, str], dict] = {}
     for fila in filas:
+        llave = (
+            fila["nrc"],
+            fila["clave"],
+            fila["nombre_materia"],
+            fila["seccion"],
+            fila["docente_nombre"],
+        )
+        registro = agrupados.setdefault(
+            llave,
+            {
+                "nrc": fila["nrc"],
+                "clave": fila["clave"],
+                "nombre_materia": fila["nombre_materia"],
+                "seccion": fila["seccion"],
+                "docente_nombre": fila["docente_nombre"],
+                "horarios": [],
+            },
+        )
+        if fila["horario"] not in registro["horarios"]:
+            registro["horarios"].append(fila["horario"])
+
+    for fila in agrupados.values():
         nombre_docente = fila["docente_nombre"]
         if not nombre_docente:
             continue
@@ -88,14 +326,14 @@ def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> int:
                 nombre_materia=fila["nombre_materia"],
                 seccion=fila["seccion"],
                 clave=fila["clave"],
-                horario=fila["horario"],
+                horario=" ; ".join(fila["horarios"]),
             )
             db.add(materia)
             registros_importados += 1
         else:
             # Actualiza datos si ya existía
             materia.nombre_materia = fila["nombre_materia"]
-            materia.horario = fila["horario"]
+            materia.horario = " ; ".join(fila["horarios"])
 
     db.commit()
     return registros_importados
@@ -104,3 +342,90 @@ def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> int:
 def listar_docentes(db: Session) -> List[models.Docente]:
     """Devuelve todos los docentes con sus materias (eager load automático)."""
     return db.query(models.Docente).all()
+
+
+# ── Importación del Directorio "Personal Docente" ─────────────────────────────
+def _parsear_pagina_directorio(pagina) -> List[dict]:
+    """
+    Extrae texto de una página del PDF "Personal Docente" y lo parsea línea por línea.
+    """
+    registros = []
+    texto = pagina.extract_text()
+    if not texto:
+        return registros
+    
+    lineas = texto.split('\n')
+    started = False
+    
+    for line in lineas:
+        line = line.strip()
+        if not line:
+            continue
+        # Buscar el encabezado para empezar a parsear (o seguir si ya empezó)
+        if "Nombre Correo" in line:
+            started = True
+            continue
+        if not started:
+            continue
+        
+        # Parsear con regex
+        match = re.search(r'^(.*?)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s*(.*)$', line)
+        if match:
+            nombre = match.group(1).strip()
+            email = match.group(2).strip()
+            rest = match.group(3).strip()
+            ubicacion = rest.split()[0] if rest else ""
+            
+            registros.append({
+                "nombre": nombre,
+                "email": email,
+                "ubicacion": ubicacion
+            })
+            
+    return registros
+
+def importar_directorio_docentes_pdf(contenido: bytes, db: Session) -> int:
+    """
+    Procesa el PDF de "Personal Docente" para actualizar/crear la información de los docentes
+    (email y departamento/ubicación).
+    
+    Returns:
+        Número de registros de docentes importados/actualizados.
+    """
+    registros_importados = 0
+
+    with pdfplumber.open(BytesIO(contenido)) as pdf:
+        filas = []
+        for pagina in pdf.pages:
+            filas.extend(_parsear_pagina_directorio(pagina))
+
+    for fila in filas:
+        nombre_docente = fila["nombre"]
+        if not nombre_docente:
+            continue
+
+        # 1. Buscar o crear el docente
+        docente = (
+            db.query(models.Docente)
+            .filter(models.Docente.nombre == nombre_docente)
+            .first()
+        )
+        if not docente:
+            docente = models.Docente(
+                nombre=nombre_docente,
+                email=fila["email"],
+                departamento=fila["ubicacion"]
+            )
+            db.add(docente)
+            registros_importados += 1
+        else:
+            # Actualiza datos si ya existía y si trajo nueva información
+            # Se prioriza la nueva importación
+            if fila["email"]:
+                docente.email = fila["email"]
+            if fila["ubicacion"]:
+                docente.departamento = fila["ubicacion"]
+            registros_importados += 1
+
+    db.commit()
+    return registros_importados

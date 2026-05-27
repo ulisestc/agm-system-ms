@@ -1,174 +1,48 @@
-# AGM Microservices
+# Microservicios del Sistema AGM
 
-Este repositorio contiene el microservicio unificado del proyecto AGM para Servicios Web:
+Este directorio contiene el núcleo de la lógica de negocio del Sistema AGM, estructurado bajo una arquitectura de microservicios. Cada módulo es independiente, posee su propia persistencia de datos y se comunica con los demás mediante protocolos de mensajería.
 
-- `ms-periodos-materias`: CRUD de periodos académicos y materias.
+## Catálogo de Servicios
 
-El servicio expone una API REST y utiliza RabbitMQ para comunicación asíncrona y RPC.
+### ms-auth
+Responsable de la seguridad perimetral, gestión de identidades y emisión de tokens de acceso (JWT). Utiliza FastAPI y PostgreSQL.
 
-El despliegue usa una base de datos PostgreSQL independiente llamada `agm_periodos_materias_db`.
+### ms-periodos-materias
+Administra la estructura temporal y académica. Gestiona los ciclos escolares (periodos) y el catálogo de asignaturas (materias). Desarrollado en Django con PostgreSQL.
 
-## Estructura
+### ms-docentes
+Gestiona el directorio de personal docente y alumnos. Expone procedimientos RPC sobre RabbitMQ para la resolución rápida de perfiles desde otros microservicios. Utiliza FastAPI y PostgreSQL.
 
-- `ms-periodos-materias/`
-- `archive/ms-materias/` para el servicio retirado
-- `../docker-compose.yml`
+### ms-calificaciones
+Controla el proceso de evaluación. Permite la definición de actividades, ponderaciones y el registro de notas. Desarrollado en FastAPI con PostgreSQL.
 
-## Requisitos
+### ms-asistencias
+Sistema de control de asistencia basado en tokens dinámicos. Utiliza Redis para la validación de códigos QR y PostgreSQL para el historial de presencia. Desarrollado en FastAPI.
 
-- Docker y Docker Compose
-- Python 3.12 si deseas correrlos fuera de Docker
+### ms-notificaciones
+Motor de mensajería asíncrona. Procesa colas de RabbitMQ para el envío de correos electrónicos transaccionales. Desarrollado en Node.js.
 
-## Configuración local
+### ms-reportes
+Módulo especializado en la síntesis de información. Genera documentos en formato PDF (ReportLab) y Excel (OpenPyXL), integrando datos de otros servicios mediante RabbitMQ RPC. Desarrollado en FastAPI.
 
-1. Copia el archivo de ejemplo:
+## Estructura de Directorios
 
-```bash
-cp ms-periodos-materias/.env.example ms-periodos-materias/.env
-```
+Cada microservicio mantiene una estructura interna estándar:
+- `src/`: Código fuente de la aplicación.
+- `Dockerfile`: Definición de la imagen para el despliegue en contenedores.
+- `requirements.txt` o `package.json`: Definición de dependencias.
+- `.env.example`: Plantilla de variables de configuración.
+- `README.md`: Documentación específica del servicio.
 
-2. Si vas a correr con Docker, puedes dejar los valores tal como están en este repositorio porque `docker-compose.yml` sobrescribe la conexión a la base de datos con el contenedor interno.
+## Comunicación Inter-servicios
 
-3. Si vas a correr el servicio directamente en tu máquina, cambia `DB_HOST` a `localhost` y usa una instancia propia de PostgreSQL.
+- **Eventos (RabbitMQ):** Utilizado para notificaciones asíncronas y propagación de cambios de estado entre servicios.
+- **RPC (RabbitMQ):** Utilizado para consultas síncronas entre microservicios (Request-Response) sin dependencias directas de red.
+- **REST:** Interfaz expuesta hacia el API Gateway para la interacción con las aplicaciones cliente.
 
-## Levantar todo con un comando
+## Requisitos de Ejecución
 
-```bash
-docker compose up --build
-```
-
-Servicios expuestos:
-
-- `ms-periodos-materias`: `http://localhost:8001`
-
-Endpoints de salud:
-
-- `http://localhost:8001/health/`
-
-## Ejecutar sin Docker
-
-### `ms-periodos-materias`
-
-```bash
-cd ms-periodos-materias
-pip install -r requirements.txt
-python manage.py migrate --run-syncdb
-python manage.py runserver 0.0.0.0:8000
-```
-
-## Pruebas manuales
-
-### 1. Crear un periodo
-
-```bash
-curl -X POST http://localhost:8001/api/periodos/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nombre": "2026 Primavera",
-    "fecha_inicio": "2026-01-10",
-    "fecha_fin": "2026-05-30",
-    "plan_estudios": "ISC 2026",
-    "activo": true
-  }'
-```
-
-### 2. Listar periodos con paginación
-
-```bash
-curl http://localhost:8001/api/periodos/?page=1&limit=10
-```
-
-### 3. Obtener el periodo activo
-
-```bash
-curl http://localhost:8001/api/periodos/activo/
-```
-
-### 4. Activar un periodo por ID
-
-```bash
-curl -X POST http://localhost:8001/api/periodos/1/activar/
-```
-
-### 5. Crear una materia
-
-Antes de crear una materia, asegúrate de haber creado un periodo válido. El servicio valida que el `periodo_id` exista antes de guardar el registro.
-
-```bash
-curl -X POST http://localhost:8001/api/materias/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nrc": "12345",
-    "nombre": "Servicios Web",
-    "seccion": "001",
-    "clave": "ISW-302",
-    "docente_id": 10,
-    "docente_nombre": "Dra. López",
-    "horario": "Lunes 10:00-12:00",
-    "periodo_id": 1,
-    "activo": true
-  }'
-```
-
-### 6. Filtrar materias por periodo
-
-```bash
-curl http://localhost:8001/api/materias/?periodo_id=1
-```
-
-### 7. Listar materias con nombre de periodo
-
-```bash
-curl http://localhost:8001/api/materias/con-periodo/
-```
-
-### 8. Cerrar una materia y notificar por Eventos
-
-```bash
-curl -X POST http://localhost:8001/api/materias/1/cerrar/
-```
-
-Este endpoint marca la materia como inactiva y publica un evento en RabbitMQ para que el servicio de notificaciones envíe los correos correspondientes.
-
-### 9. Consultar una materia por ID
-
-```bash
-curl http://localhost:8001/api/materias/1/
-```
-
-### 10. Actualizar una materia
-
-```bash
-curl -X PUT http://localhost:8001/api/materias/1/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nrc": "12345",
-    "nombre": "Servicios Web II",
-    "seccion": "001",
-    "clave": "ISW-402",
-    "docente_id": 10,
-    "docente_nombre": "Dra. López",
-    "horario": "Lunes 10:00-12:00",
-    "periodo_id": 1,
-    "activo": true
-  }'
-```
-
-### 11. Eliminar una materia
-
-```bash
-curl -X DELETE http://localhost:8001/api/materias/1/
-```
-
-## Pruebas automáticas
-
-Si tienes Django instalado en tu entorno local, puedes correr:
-
-```bash
-cd ms-periodos-materias && python manage.py test
-```
-
-## Notas de arquitectura
-
-- `ms-periodos-materias` concentra periodos y materias en un único proceso.
-- El esquema de comunicación se basa en RabbitMQ RPC y Eventos para desacoplamiento y escalabilidad.
+Para ejecutar un servicio de forma individual fuera del entorno de orquestación (Docker Compose), se requiere:
+- Python 3.12+ (para servicios basados en FastAPI/Django).
+- Node.js LTS (para el servicio de notificaciones).
+- Acceso a las instancias correspondientes de PostgreSQL, Redis y RabbitMQ.

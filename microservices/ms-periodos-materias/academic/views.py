@@ -162,7 +162,6 @@ class MateriaViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         periodo_id = serializer.validated_data["periodo_id"]
-        docente_id_default = serializer.validated_data.get("docente_id_default")
         archivo = serializer.validated_data.get("archivo")
         texto = serializer.validated_data.get("texto", "").strip()
 
@@ -171,13 +170,11 @@ class MateriaViewSet(viewsets.ModelViewSet):
                 result = import_materias_from_pdf(
                     archivo,
                     periodo_id=periodo_id,
-                    docente_id_default=docente_id_default,
                 )
             else:
                 result = import_materias_from_text(
                     texto,
                     periodo_id=periodo_id,
-                    docente_id_default=docente_id_default,
                 )
         except ValueError as exc:
             return self._error(str(exc), status.HTTP_400_BAD_REQUEST)

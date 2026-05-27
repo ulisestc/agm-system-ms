@@ -8,7 +8,7 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-ms-periodos")
+SECRET_KEY = os.getenv("SECRET_KEY", "clave_super_secreta_desarrollo_agm")
 DEBUG = os.getenv("DEBUG", "True").lower() in {"1", "true", "yes"}
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("ALLOWED_HOSTS", "*").split(",") if host.strip()]
 
