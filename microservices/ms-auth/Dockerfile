@@ -10,11 +10,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # Copiar e instalar dependencias de Python
-COPY microservices/ms-auth/requirements.txt ./
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar el código fuente del microservicio
-COPY microservices/ms-auth/ .
+COPY . .
 
 # Puerto REST
 EXPOSE 8000

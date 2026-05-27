@@ -9,10 +9,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar e instalar dependencias primero
-COPY microservices/ms-reportes/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY microservices/ms-reportes/ .
+COPY . .
 
 # Puerto REST (FastAPI/uvicorn)
 EXPOSE 8007

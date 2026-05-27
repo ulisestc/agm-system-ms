@@ -3,10 +3,10 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
-COPY microservices/ms-calificaciones/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY microservices/ms-calificaciones/src ./src
+COPY src ./src
 
 EXPOSE 8004
 

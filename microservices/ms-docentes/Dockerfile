@@ -10,11 +10,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar e instalar dependencias de Python
-COPY microservices/ms-docentes/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar código fuente
-COPY microservices/ms-docentes/ .
+COPY . .
 
 # Exponer puertos: 8003 (REST)
 EXPOSE 8003
