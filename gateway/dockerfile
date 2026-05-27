@@ -1,6 +1,12 @@
-FROM nginx:alpine
+FROM python:3.11-slim
 
-# Copiar la plantilla para que Nginx haga el envsubst automáticamente al iniciar
-COPY default.conf.template /etc/nginx/templates/default.conf.template
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY main.py .
 
 EXPOSE 80
+
+CMD ["python", "main.py"]
