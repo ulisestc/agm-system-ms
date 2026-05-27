@@ -148,7 +148,6 @@ class MateriaAPITests(APITestCase):
             "/api/materias/importar/",
             {
                 "periodo_id": self.periodo.id,
-                "docente_id_default": 15,
                 "texto": (
                     "12345 ITIS 252 Servicios Web OO1 L 0800-0859 CASTILLO - AVILA ARLEM ALEIDA 1CCO2/207\n"
                     "12345 ITIS 252 Servicios Web OO1 A 0700-0859 CASTILLO - AVILA ARLEM ALEIDA 1CCO2/207\n"
