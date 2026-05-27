@@ -3,18 +3,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Dependencias del sistema necesarias para psycopg2 y compilación de paquetes
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
- && rm -rf /var/lib/apt/lists/*
+ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_RETRIES=20
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_CACHE_DIR=1
 
 # Copiar e instalar dependencias de Python
 COPY microservices/ms-auth/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --upgrade pip setuptools wheel \
+ && pip install --prefer-binary -r requirements.txt
 
 # Copiar el código fuente del microservicio
-COPY microservices/ms-auth/ .
+COPY . .
 
 # Puerto REST
 EXPOSE 8000

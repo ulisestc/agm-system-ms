@@ -1,0 +1,75 @@
+# Resolver interno de Railway para encontrar servicios dinámicamente
+resolver 127.0.0.11 valid=30s;
+
+server {
+    listen 80;
+
+    # Usar variables para evitar que Nginx falle al arrancar si el DNS no responde
+    set $ms_auth_host ${MS_AUTH_HOST};
+    set $ms_periodos_host ${MS_PERIODOS_HOST};
+    set $ms_docentes_host ${MS_DOCENTES_HOST};
+    set $ms_calificaciones_host ${MS_CALIFICACIONES_HOST};
+    set $ms_asistencias_host ${MS_ASISTENCIAS_HOST};
+    set $ms_reportes_host ${MS_REPORTES_HOST};
+
+    # Health check del Gateway (Sin dependencias para asegurar que cargue)
+    location /health {
+        access_log off;
+        return 200 'Gateway is up and running';
+        add_header Content-Type text/plain;
+    }
+
+    # ms-1 auth    
+    location /api/auth/ {
+        proxy_pass http://$ms_auth_host:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ms-2 periodos materias
+    location /api/periodos/ {
+        proxy_pass http://$ms_periodos_host:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ms-3 docentes alumnos
+    location /api/docentes/ {
+        proxy_pass http://$ms_docentes_host:8003/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # 5. ms-4 calificaciones
+    location /api/calificaciones/ {
+        proxy_pass http://$ms_calificaciones_host:8004/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ms-5 asistencias
+    location /api/asistencias/ {
+        proxy_pass http://$ms_asistencias_host:8005/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ms-7 reportes
+    location /api/reportes/ {
+        proxy_pass http://$ms_reportes_host:8007/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

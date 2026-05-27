@@ -2,17 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias para psycopg2 y reportlab
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_RETRIES=20
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_CACHE_DIR=1
 
 # Copiar e instalar dependencias primero
 COPY microservices/ms-reportes/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --upgrade pip setuptools wheel \
+ && pip install --prefer-binary -r requirements.txt
 
-COPY microservices/ms-reportes/ .
+COPY . .
 
 # Puerto REST (FastAPI/uvicorn)
 EXPOSE 8007
