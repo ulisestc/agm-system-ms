@@ -13,6 +13,8 @@ from main import get_password_hash # Importar desde main para usar exactamente l
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 logger = logging.getLogger("[RabbitMQ-RPC ms-auth]")
 
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 def _rol_to_string(rol) -> str:
     if isinstance(rol, models.RolUsuario):
         return rol.value

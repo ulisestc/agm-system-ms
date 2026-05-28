@@ -54,14 +54,15 @@ async def proxy_api(request: Request, service: str, path: str):
 @app.api_route("/{service}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
 async def proxy(request: Request, service: str, path: str):
     if service not in SERVICES:
+        print(f"!! [Proxy Error] Servicio '{service}' no encontrado (Path: {path})")
         raise HTTPException(status_code=404, detail=f"Servicio '{service}' no encontrado")
 
-    service_config = SERVICES[service]
-    target_host = service_config["host"]
-    target_port = service_config["port"]
+    config = SERVICES[service]
+    target_host = config["host"]
+    target_port = config["port"]
 
     if not target_host:
-        raise HTTPException(status_code=502, detail=f"Host faltante para: {service}")
+        raise HTTPException(status_code=502, detail=f"Host no configurado para: {service}")
 
     # Construir URL objetivo. Algunos microservicios exponen su API bajo un prefijo
     # (p.ej. ms-periodos-materias usa '/api/'). Respetamos el prefijo definido.
@@ -76,7 +77,7 @@ async def proxy(request: Request, service: str, path: str):
     if request.query_params:
         url += f"?{request.query_params}"
 
-    print(f"--> [Proxy] {request.method} /{service}/{path} -> {url}")
+    print(f"--> [Proxy] {request.method} -> {url}")
 
     try:
         content = await request.body()
@@ -97,10 +98,15 @@ async def proxy(request: Request, service: str, path: str):
             follow_redirects=True
         )
 
+        # Filtramos headers de CORS para evitar duplicados
+        resp_headers = dict(response.headers)
+        for h in ["access-control-allow-origin", "access-control-allow-credentials", "access-control-allow-methods", "access-control-allow-headers"]:
+            resp_headers.pop(h, None)
+
         return Response(
             content=response.content,
             status_code=response.status_code,
-            headers=dict(response.headers)
+            headers=resp_headers
         )
     except Exception as e:
         print(f"!! [Proxy Error] {str(e)}")

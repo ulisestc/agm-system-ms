@@ -42,7 +42,28 @@ class NotificationController {
             `
         };
 
-        return await emailService.sendMail(mailOptions, 'bienvenida', alumnoId);
+        return await emailService.sendMail(mailOptions, 'bienvenida_alumno', alumnoId);
+    }
+
+    async handleBienvenidaDocente(data) {
+        const { docenteNombre, docenteEmail, docenteId, claveUnica } = data;
+        
+        const mailOptions = {
+            to: docenteEmail,
+            subject: `¡Bienvenido al sistema AGM, Profesor(a) ${docenteNombre}!`,
+            html: `
+                <h2>Hola ${docenteNombre}</h2>
+                <p>Se ha creado su cuenta como <b>Docente</b> en el sistema Academic Grade Management (AGM).</p>
+                <p>Sus credenciales de acceso son:</p>
+                <ul>
+                    <li><b>Usuario:</b> ${docenteEmail}</li>
+                    <li><b>Contraseña:</b> ${claveUnica}</li>
+                </ul>
+                <p>Le recomendamos cambiar su contraseña al iniciar sesión por primera vez.</p>
+            `
+        };
+
+        return await emailService.sendMail(mailOptions, 'bienvenida_docente', docenteId);
     }
 
     async handleBaja(data) {
