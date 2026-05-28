@@ -54,16 +54,19 @@ def health_check():
     return {"mensaje": "¡MS-3 Docentes & Alumnos está corriendo!", "version": "1.0.0"}
 
 
-# ── 5. Lanzar RabbitMQ RPC en hilo daemon al iniciar FastAPI ──────────────────
+# ── 5. Lanzar RabbitMQ RPC + ImportWorker en hilos daemon al iniciar FastAPI ──
 @app.on_event("startup")
-def start_rabbitmq_server():
-    """
-    Arranca el servidor RabbitMQ RPC en un hilo separado para que coexista con FastAPI.
-    """
+def start_background_workers():
     import rabbitmq_server
-    t = threading.Thread(target=rabbitmq_server.serve, daemon=True)
-    t.start()
+    from src import import_worker
+
+    t_rpc = threading.Thread(target=rabbitmq_server.serve, daemon=True, name="rpc-server")
+    t_rpc.start()
     print("[Startup] Servidor RabbitMQ-RPC iniciado en hilo daemon")
+
+    t_worker = threading.Thread(target=import_worker.serve, daemon=True, name="import-worker")
+    t_worker.start()
+    print("[Startup] ImportWorker iniciado en hilo daemon")
 
 
 # ── 6. Punto de entrada para ejecución directa ───────────────────────────────

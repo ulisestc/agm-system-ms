@@ -55,37 +55,27 @@ async def importar_alumnos(
     contenido = await archivo.read()
     try:
         alumnos_nuevos = alumnos_service.importar_alumnos_desde_pdf(contenido, materiaId, db)
-
-        # Notificar Bienvenida y Crear Usuarios
-        if alumnos_nuevos:
-            token = authorization.replace("Bearer ", "") if authorization else "no-token"
-            materia = db.query(models.MateriaDocente).filter(models.MateriaDocente.nrc == materiaId).first()
-            materia_nombre = materia.nombre_materia if materia else f"NRC {materiaId}"
-
-            from src.notifications import send_bienvenida_notif, create_user_auth_rpc
-            import os
-            # Obtener whitelist de env
-            whitelist_raw = os.getenv("NOTIFY_ALUMNO_WHITELIST", "")
-            whitelist = [e.strip().lower() for e in whitelist_raw.split(",") if e.strip()]
-
-            for alu in alumnos_nuevos:
-                # 1. Crear usuario en ms-auth
-                if alu.email:
-                    rpc_res = create_user_auth_rpc(alu.email, "Alumno")
-                    if rpc_res.get("success"):
-                        password = rpc_res.get("password")
-                        alu_dict = {"id": alu.id, "nombre": alu.nombre, "email": alu.email, "matricula": alu.matricula}
-                        
-                        # 2. Notificar solo si esta en whitelist (o si la whitelist esta vacia/desactivada)
-                        if not whitelist or alu.email.lower() in whitelist:
-                            send_bienvenida_notif(alu_dict, materia_nombre, password, token)
-                        else:
-                            print(f"Skipping student email notification for {alu.email} (not in whitelist)")
-                    else:
-                        print(f"Error creando usuario para {alu.email}: {rpc_res.get('error_message')}")
-
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Error al procesar el PDF: {str(exc)}")
+
+    if alumnos_nuevos:
+        import os
+        from src.notifications import rabbitmq as _rmq
+        token = authorization.replace("Bearer ", "") if authorization else "no-token"
+        materia = db.query(models.MateriaDocente).filter(models.MateriaDocente.nrc == materiaId).first()
+        materia_nombre = materia.nombre_materia if materia else f"NRC {materiaId}"
+        whitelist = [e.strip().lower() for e in os.getenv("NOTIFY_ALUMNO_WHITELIST", "").split(",") if e.strip()]
+
+        _rmq.publish_to_queue(
+            "docentes_import_jobs_queue",
+            {
+                "job_type": "crear_usuarios_alumnos",
+                "alumno_ids": [a.id for a in alumnos_nuevos],
+                "materia_nombre": materia_nombre,
+                "token": token,
+                "whitelist": whitelist,
+            },
+        )
 
     return ImportacionResponse(
         mensaje=f"Importación de alumnos para NRC {materiaId} completada",
@@ -117,28 +107,23 @@ async def importar_alumnos_auto(
 
     alumnos_nuevos = alumnos_service.importar_alumnos_desde_pdf(contenido, materiaId, db)
     if alumnos_nuevos:
+        import os
+        from src.notifications import rabbitmq as _rmq
         token = authorization.replace("Bearer ", "") if authorization else "no-token"
         materia = db.query(models.MateriaDocente).filter(models.MateriaDocente.nrc == materiaId).first()
         materia_nombre = materia.nombre_materia if materia else f"NRC {materiaId}"
+        whitelist = [e.strip().lower() for e in os.getenv("NOTIFY_ALUMNO_WHITELIST", "").split(",") if e.strip()]
 
-        from src.notifications import send_bienvenida_notif, create_user_auth_rpc
-        import os
-        whitelist_raw = os.getenv("NOTIFY_ALUMNO_WHITELIST", "")
-        whitelist = [e.strip().lower() for e in whitelist_raw.split(",") if e.strip()]
-
-        for alu in alumnos_nuevos:
-            if alu.email:
-                rpc_res = create_user_auth_rpc(alu.email, "Alumno")
-                if rpc_res.get("success"):
-                    password = rpc_res.get("password")
-                    alu_dict = {"id": alu.id, "nombre": alu.nombre, "email": alu.email, "matricula": alu.matricula}
-                    
-                    if not whitelist or alu.email.lower() in whitelist:
-                        send_bienvenida_notif(alu_dict, materia_nombre, password, token)
-                    else:
-                        print(f"Skipping student email notification for {alu.email} (not in whitelist)")
-                else:
-                    print(f"Error creando usuario para {alu.email}: {rpc_res.get('error_message')}")
+        _rmq.publish_to_queue(
+            "docentes_import_jobs_queue",
+            {
+                "job_type": "crear_usuarios_alumnos",
+                "alumno_ids": [a.id for a in alumnos_nuevos],
+                "materia_nombre": materia_nombre,
+                "token": token,
+                "whitelist": whitelist,
+            },
+        )
 
     return ImportacionResponse(
         mensaje=f"Importacion de alumnos para NRC {materiaId} completada",

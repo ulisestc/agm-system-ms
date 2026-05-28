@@ -37,7 +37,7 @@ class RabbitMQManager:
         try:
             if not self.channel or self.channel.is_closed:
                 self._connect()
-            
+
             self.channel.exchange_declare(exchange=exchange, exchange_type='topic', durable=True)
             self.channel.basic_publish(
                 exchange=exchange,
@@ -50,6 +50,22 @@ class RabbitMQManager:
             logger.info(f"Evento publicado: {routing_key}")
         except Exception as e:
             logger.error(f"Error publicando evento: {e}")
+
+    def publish_to_queue(self, queue_name: str, message: dict):
+        """Publica un mensaje directamente a una cola durable (sin exchange)."""
+        try:
+            if not self.channel or self.channel.is_closed:
+                self._connect()
+            self.channel.queue_declare(queue=queue_name, durable=True)
+            self.channel.basic_publish(
+                exchange='',
+                routing_key=queue_name,
+                body=json.dumps(message),
+                properties=pika.BasicProperties(delivery_mode=2),
+            )
+            logger.info(f"Job publicado en cola: {queue_name}")
+        except Exception as e:
+            logger.error(f"Error publicando a cola {queue_name}: {e}")
 
     def subscribe_to_events(self, exchange, queue_name, routing_keys, callback):
         """Se suscribe a eventos asíncronos"""
