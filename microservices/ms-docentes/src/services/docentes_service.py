@@ -255,16 +255,16 @@ def _finalizar_registro(registro: dict) -> List[dict]:
     ]
 
 
-def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> int:
+def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> List[models.Docente]:
     """
     Procesa el PDF de programación académica y persiste los datos en PostgreSQL.
     Estrategia: upsert por nombre de docente + NRC para evitar duplicados en
     reimportaciones.
 
     Returns:
-        Número de registros de materias importados.
+        Lista de docentes procesados.
     """
-    registros_importados = 0
+    docentes_procesados = []
 
     with pdfplumber.open(BytesIO(contenido)) as pdf:
         filas = []
@@ -294,6 +294,7 @@ def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> int:
         if fila["horario"] not in registro["horarios"]:
             registro["horarios"].append(fila["horario"])
 
+    vistos_ids = set()
     for fila in agrupados.values():
         nombre_docente = fila["docente_nombre"]
         if not nombre_docente:
@@ -309,6 +310,10 @@ def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> int:
             docente = models.Docente(nombre=nombre_docente)
             db.add(docente)
             db.flush()   # obtenemos el id sin hacer commit todavía
+
+        if docente.id not in vistos_ids:
+            docentes_procesados.append(docente)
+            vistos_ids.add(docente.id)
 
         # 2. Upsert de la materia del docente
         materia = (
@@ -329,14 +334,15 @@ def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> int:
                 horario=" ; ".join(fila["horarios"]),
             )
             db.add(materia)
-            registros_importados += 1
         else:
             # Actualiza datos si ya existía
             materia.nombre_materia = fila["nombre_materia"]
             materia.horario = " ; ".join(fila["horarios"])
 
     db.commit()
-    return registros_importados
+    for d in docentes_procesados:
+        db.refresh(d)
+    return docentes_procesados
 
 
 def listar_docentes(db: Session) -> List[models.Docente]:
@@ -396,15 +402,15 @@ def _parsear_pagina_directorio(pagina) -> List[dict]:
             
     return registros
 
-def importar_directorio_docentes_pdf(contenido: bytes, db: Session) -> int:
+def importar_directorio_docentes_pdf(contenido: bytes, db: Session) -> List[models.Docente]:
     """
     Procesa el PDF de "Personal Docente" para actualizar/crear la información de los docentes
     (email y departamento/ubicación).
     
     Returns:
-        Número de registros de docentes importados/actualizados.
+        Lista de docentes procesados.
     """
-    registros_importados = 0
+    docentes_procesados = []
 
     with pdfplumber.open(BytesIO(contenido)) as pdf:
         filas = []
@@ -429,7 +435,6 @@ def importar_directorio_docentes_pdf(contenido: bytes, db: Session) -> int:
                 departamento=fila["ubicacion"]
             )
             db.add(docente)
-            registros_importados += 1
         else:
             # Actualiza datos si ya existía y si trajo nueva información
             # Se prioriza la nueva importación
@@ -437,7 +442,10 @@ def importar_directorio_docentes_pdf(contenido: bytes, db: Session) -> int:
                 docente.email = fila["email"]
             if fila["ubicacion"]:
                 docente.departamento = fila["ubicacion"]
-            registros_importados += 1
+        
+        docentes_procesados.append(docente)
 
     db.commit()
-    return registros_importados
+    for d in docentes_procesados:
+        db.refresh(d)
+    return docentes_procesados
