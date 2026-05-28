@@ -1,17 +1,17 @@
 """
 import_worker.py
-Consume la cola `docentes_import_jobs_queue` y ejecuta, en background,
-la creación de usuarios en ms-auth + envío de notificaciones por cada
-registro importado desde PDF.
+Consume la cola `docentes_import_jobs_queue` y procesa en un hilo separado
+la creación de usuarios en ms-auth + notificaciones por cada registro importado.
 
-Se ejecuta en un hilo daemon propio con sus propias conexiones a RabbitMQ,
-por lo que no comparte estado con el hilo de FastAPI ni con el servidor RPC.
+El callback de pika hace ACK inmediatamente y delega el trabajo a un thread,
+evitando que el consumer connection pierda el heartbeat en imports grandes.
 """
 import json
 import logging
 import os
-import time
 import sys
+import threading
+import time
 
 import pika
 
@@ -24,17 +24,7 @@ logger = logging.getLogger("[ImportWorker]")
 QUEUE_NAME = "docentes_import_jobs_queue"
 
 
-# ── Conexiones propias del worker (no compartidas con otros hilos) ────────────
-
-def _make_rpc_client() -> RabbitMQRpcClient:
-    return RabbitMQRpcClient()
-
-
-def _make_publisher() -> RabbitMQManager:
-    return RabbitMQManager()
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Helpers de notificación ───────────────────────────────────────────────────
 
 def _create_user(rpc: RabbitMQRpcClient, email: str, rol: str) -> dict:
     try:
@@ -79,13 +69,15 @@ def _notify_alumno(pub: RabbitMQManager, alumno: dict, materia_nombre: str, pass
         logger.error(f"Error notificando alumno {alumno['email']}: {e}")
 
 
-# ── Procesadores de jobs ──────────────────────────────────────────────────────
+# ── Procesadores (se ejecutan en hilos propios con conexiones propias) ────────
 
-def _procesar_docentes(data: dict, rpc: RabbitMQRpcClient, pub: RabbitMQManager):
+def _procesar_docentes(data: dict):
     docente_ids: list = data.get("docente_ids", [])
     token: str = data.get("token", "no-token")
     whitelist: list = data.get("whitelist", [])
 
+    rpc = RabbitMQRpcClient()
+    pub = RabbitMQManager()
     db = SessionLocal()
     try:
         ok = skipped = errors = 0
@@ -112,19 +104,21 @@ def _procesar_docentes(data: dict, rpc: RabbitMQRpcClient, pub: RabbitMQManager)
             else:
                 logger.info(f"Notificación omitida (whitelist): {docente.email}")
 
-        logger.info(
-            f"Job docentes terminado — creados:{ok} sin_email:{skipped} errores:{errors}"
-        )
+        logger.info(f"Job docentes terminado — creados:{ok} sin_email:{skipped} errores:{errors}")
+    except Exception as e:
+        logger.error(f"Error en job docentes: {e}")
     finally:
         db.close()
 
 
-def _procesar_alumnos(data: dict, rpc: RabbitMQRpcClient, pub: RabbitMQManager):
+def _procesar_alumnos(data: dict):
     alumno_ids: list = data.get("alumno_ids", [])
     token: str = data.get("token", "no-token")
     whitelist: list = data.get("whitelist", [])
     materia_nombre: str = data.get("materia_nombre", "")
 
+    rpc = RabbitMQRpcClient()
+    pub = RabbitMQManager()
     db = SessionLocal()
     try:
         ok = skipped = errors = 0
@@ -157,35 +151,36 @@ def _procesar_alumnos(data: dict, rpc: RabbitMQRpcClient, pub: RabbitMQManager):
             else:
                 logger.info(f"Notificación omitida (whitelist): {alumno.email}")
 
-        logger.info(
-            f"Job alumnos terminado — creados:{ok} sin_email:{skipped} errores:{errors}"
-        )
+        logger.info(f"Job alumnos terminado — creados:{ok} sin_email:{skipped} errores:{errors}")
+    except Exception as e:
+        logger.error(f"Error en job alumnos: {e}")
     finally:
         db.close()
 
 
-# ── Callback del consumidor ───────────────────────────────────────────────────
+# ── Dispatcher: ACK inmediato + hilo separado ─────────────────────────────────
 
-def _make_callback(rpc: RabbitMQRpcClient, pub: RabbitMQManager):
-    def on_message(ch, method, _properties, body):
-        try:
-            data = json.loads(body)
-            job_type = data.get("job_type")
-            logger.info(f"Job recibido: {job_type}")
+def _dispatch(data: dict):
+    job_type = data.get("job_type")
+    if job_type == "crear_usuarios_docentes":
+        t = threading.Thread(target=_procesar_docentes, args=(data,), daemon=True)
+    elif job_type == "crear_usuarios_alumnos":
+        t = threading.Thread(target=_procesar_alumnos, args=(data,), daemon=True)
+    else:
+        logger.warning(f"Tipo de job desconocido: {job_type}")
+        return
+    t.start()
 
-            if job_type == "crear_usuarios_docentes":
-                _procesar_docentes(data, rpc, pub)
-            elif job_type == "crear_usuarios_alumnos":
-                _procesar_alumnos(data, rpc, pub)
-            else:
-                logger.warning(f"Tipo de job desconocido: {job_type}")
 
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-        except Exception as e:
-            logger.error(f"Error fatal en job: {e}")
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-
-    return on_message
+def _on_message(ch, method, _properties, body):
+    try:
+        data = json.loads(body)
+        logger.info(f"Job recibido: {data.get('job_type')} — ACK inmediato, procesando en hilo")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+        _dispatch(data)
+    except Exception as e:
+        logger.error(f"Error en callback: {e}")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 # ── Bucle principal con reconexión ────────────────────────────────────────────
@@ -196,18 +191,12 @@ def serve():
 
     while True:
         try:
-            rpc = _make_rpc_client()
-            pub = _make_publisher()
-
             params = pika.URLParameters(url)
             connection = pika.BlockingConnection(params)
             channel = connection.channel()
             channel.queue_declare(queue=QUEUE_NAME, durable=True)
             channel.basic_qos(prefetch_count=1)
-            channel.basic_consume(
-                queue=QUEUE_NAME,
-                on_message_callback=_make_callback(rpc, pub),
-            )
+            channel.basic_consume(queue=QUEUE_NAME, on_message_callback=_on_message)
             logger.info(f"Consumiendo cola '{QUEUE_NAME}'")
             channel.start_consuming()
         except Exception as e:
