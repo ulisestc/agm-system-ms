@@ -6,6 +6,8 @@ until python -c "import os, psycopg2; psycopg2.connect(host=os.getenv('DB_HOST',
 done
 
 python manage.py makemigrations academic
-python manage.py migrate --fake-initial
+# Try normal migrate first, if it fails due to contenttypes issue, mark it as fake
+python manage.py migrate || python manage.py migrate --fake contenttypes.0002_remove_content_type_name
 python manage.py runrabbitmq &
 exec python manage.py runserver 0.0.0.0:8000
+
