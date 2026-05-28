@@ -173,21 +173,75 @@ async def cargar_calificaciones_excel(
 
     contents = await file.read()
     try:
-        df = pd.read_excel(io.BytesIO(contents))
+        # Intentar leer el Excel de forma flexible
+        # Primero leemos todo sin asumir encabezados
+        df_raw = pd.read_excel(io.BytesIO(contents), header=None)
+        
+        # Buscar la fila que contiene los encabezados reales
+        header_row_index = 0
+        found_headers = False
+        target_cols = ['matricula', 'calificacion', 'puntos', 'dirección de correo', 'correo', 'email']
+        
+        for i, row in df_raw.iterrows():
+            row_str = [str(val).lower().strip() for val in row if val is not None]
+            if any(col in row_str for col in target_cols):
+                header_row_index = i
+                found_headers = True
+                break
+        
+        if found_headers:
+            df = pd.read_excel(io.BytesIO(contents), header=header_row_index)
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+            
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error al leer el Excel. Revisa el formato: {str(e)}")
 
     df.columns = df.columns.str.lower().str.strip()
-    if 'matricula' not in df.columns or 'calificacion' not in df.columns:
-        raise HTTPException(status_code=400, detail="El Excel debe contener exactamente las columnas 'matricula' y 'calificacion'.")
+    
+    # Mapeo flexible de columnas
+    col_matricula = None
+    for col in ['matricula', 'dirección de correo', 'correo', 'email']:
+        if col in df.columns:
+            col_matricula = col
+            break
+            
+    col_calificacion = None
+    for col in ['calificacion', 'puntos', 'nota', 'puntuación']:
+        if col in df.columns:
+            col_calificacion = col
+            break
+
+    if not col_matricula or not col_calificacion:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"No se encontraron las columnas necesarias. Columnas detectadas: {list(df.columns)}. Se requiere algo similar a 'matricula' y 'calificacion' o 'puntos'."
+        )
 
     registros = 0
     for index, row in df.iterrows():
-        matricula = str(row['matricula']).strip()
+        raw_matricula = str(row[col_matricula]).strip()
+        
+        # Si es un correo, extraer la matricula (ej: bb202321840@alm.buap.mx -> 202321840)
+        # Algunos correos institucionales de la BUAP tienen prefijos de 2 letras
+        matricula = raw_matricula
+        if "@" in raw_matricula:
+            username = raw_matricula.split("@")[0]
+            # Quitar prefijos no numéricos (ej: bb2022 -> 2022)
+            import re
+            match = re.search(r'\d+', username)
+            if match:
+                matricula = match.group()
+            else:
+                matricula = username
+        
         if matricula.endswith('.0'):
             matricula = matricula[:-2]
 
-        valor_nota = float(row['calificacion'])
+        try:
+            valor_nota = float(row[col_calificacion])
+        except (ValueError, TypeError):
+            continue # Saltar filas sin nota válida
 
         calificacion_existente = db.query(models.Calificacion).filter_by(
             actividad_id=actividad_id, alumno_id=matricula

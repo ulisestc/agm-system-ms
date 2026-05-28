@@ -54,7 +54,21 @@ async def importar_alumnos(
 
     contenido = await archivo.read()
     try:
-        alumnos_nuevos = alumnos_service.importar_alumnos_desde_pdf(contenido, materiaId, db)
+        alumnos_procesados = alumnos_service.importar_alumnos_desde_pdf(contenido, materiaId, db)
+
+        # Notificar Bienvenida
+        if alumnos_procesados:
+            token = authorization.replace("Bearer ", "") if authorization else "no-token"
+            materia = db.query(models.MateriaDocente).filter(models.MateriaDocente.nrc == materiaId).first()
+            materia_nombre = materia.nombre_materia if materia else f"NRC {materiaId}"
+
+            from src.notifications import send_bienvenida_notif
+            for item in alumnos_procesados:
+                alu = item["alumno"]
+                clave = item["clave"]
+                alu_dict = {"id": alu.id, "nombre": alu.nombre, "email": alu.email, "matricula": alu.matricula}
+                send_bienvenida_notif(alu_dict, materia_nombre, token, clave_unica=clave)
+
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Error al procesar el PDF: {str(exc)}")
 
@@ -79,7 +93,7 @@ async def importar_alumnos(
 
     return ImportacionResponse(
         mensaje=f"Importación de alumnos para NRC {materiaId} completada",
-        registros_importados=len(alumnos_nuevos),
+        registros_importados=len(alumnos_procesados),
     )
 
 

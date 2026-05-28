@@ -9,12 +9,12 @@ from auth_helper import get_auth_headers, get_token
 
 # Configuración de URLs de servicios vía Gateway
 SERVICES = {
-    "auth": "http://localhost/api/auth",
-    "periodos": "http://localhost/api/periodos/api",
-    "docentes": "http://localhost/api/docentes",
-    "asistencias": "http://localhost/api/asistencias",
-    "calificaciones": "http://localhost/api/calificaciones",
-    "reportes": "http://localhost/api/reportes",
+    "auth": "https://agm-system-ms-production.up.railway.app/auth",
+    "periodos": "https://agm-system-ms-production.up.railway.app/periodos/api",
+    "docentes": "https://agm-system-ms-production.up.railway.app/docentes",
+    "asistencias": "https://agm-system-ms-production.up.railway.app/asistencias",
+    "calificaciones": "https://agm-system-ms-production.up.railway.app/calificaciones",
+    "reportes": "https://agm-system-ms-production.up.railway.app/reportes",
 }
 
 class FunctionalTester:
@@ -25,14 +25,15 @@ class FunctionalTester:
         self.alumno_email = "alumno@buap.mx"
         self.alumno_pass = "password123"
         self.periodo_id = None
-        self.materia_nrc = "25303" # NRC sembrado
+        self.materia_nrc = "50130" # NRC que aparece en los documentos PDF
+        self.alumno_test_id = None 
 
     def print_step(self, msg):
         print(f"\n[STEP] {msg}")
 
     def setup_auth(self):
         self.print_step("Configurando Autenticación")
-        token = get_token(self.docente_email, self.docente_pass)
+        token = get_token(self.docente_email, self.docente_pass, "Docente")
         if not token:
             print("ERROR: No se pudo obtener token para el docente")
             sys.exit(1)
@@ -58,6 +59,18 @@ class FunctionalTester:
         res = self.session.get(f"{SERVICES['periodos']}/materias/")
         print(f"Listar Materias: {res.status_code}")
         assert res.status_code == 200
+        data = res.json().get("data", [])
+        # Manejar paginación (results key)
+        materias = data.get("results", []) if isinstance(data, dict) else data
+        
+        if materias:
+            # Forzar el NRC 50130 si existe, si no usar el primero
+            nrcs = [str(m.get("nrc")) for m in materias]
+            if "50130" in nrcs:
+                self.materia_nrc = "50130"
+            else:
+                self.materia_nrc = str(materias[0].get("nrc", self.materia_nrc))
+            print(f"Usando Materia NRC: {self.materia_nrc}")
 
     def test_docentes_alumnos(self):
         self.print_step("Probando MS-Docentes")
@@ -67,7 +80,7 @@ class FunctionalTester:
         print(f"Listar Docentes: {res.status_code}")
         assert res.status_code == 200
 
-        # 2. Listar Alumnos de la materia sembrada
+        # 2. Listar Alumnos de la materia
         res = self.session.get(f"{SERVICES['docentes']}/alumnos/materia/{self.materia_nrc}")
         print(f"Listar Alumnos (NRC {self.materia_nrc}): {res.status_code}")
         assert res.status_code == 200
@@ -75,6 +88,10 @@ class FunctionalTester:
         if alumnos:
             self.alumno_test_id = str(alumnos[0]["id"])
             print(f"Usando Alumno ID: {self.alumno_test_id} ({alumnos[0]['nombre']})")
+        else:
+            # Fallback if no students yet
+            print(f"  ! No se encontraron alumnos para NRC {self.materia_nrc}")
+            self.alumno_test_id = "202224429" # Un ID conocido de alumnos.pdf
 
     def test_asistencias_flow(self):
         self.print_step("Probando Flujo de Asistencia (MS-Asistencias)")

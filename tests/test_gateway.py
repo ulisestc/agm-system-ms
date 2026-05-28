@@ -1,7 +1,7 @@
 import requests
 import sys
 
-GATEWAY_URL = "http://localhost:80/api"
+GATEWAY_URL = "https://agm-system-ms-production.up.railway.app"
 
 SERVICES_PATHS = {
     "Auth": "/auth/",

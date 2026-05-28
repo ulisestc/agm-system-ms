@@ -1,13 +1,13 @@
 import logging
 import jwt
 import sys
-import secrets
-import string
-from passlib.context import CryptContext
+import bcrypt
 from rabbitmq_manager import RabbitMQRpcServer
 import models
 from database import SessionLocal
 from settings import ALGORITHM, SECRET_KEY
+
+from main import get_password_hash # Importar desde main para usar exactamente la misma lógica
 
 # Asegurar que los logs salgan a stdout
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
@@ -18,13 +18,20 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def _rol_to_string(rol) -> str:
     if isinstance(rol, models.RolUsuario):
         return rol.value
-    return str(rol)
+    return str(rol).upper() # Asegurar uppercase
 
 def _normalize_role(rol: str) -> str:
-    for rol_usuario in models.RolUsuario:
-        if rol in {rol_usuario.name, rol_usuario.value}:
-            return rol_usuario.value
-    return rol
+    # Mapeo flexible para soportar nombres legibles o claves de enum
+    mapping = {
+        "administrador": "ADMIN",
+        "admin": "ADMIN",
+        "docente": "DOCENTE",
+        "profesor": "DOCENTE",
+        "alumno": "ALUMNO",
+        "estudiante": "ALUMNO"
+    }
+    normalized = mapping.get(rol.lower(), rol.upper())
+    return normalized
 
 def _to_user_dict(usuario: models.Usuario):
     return {
@@ -128,53 +135,40 @@ class AuthRpcHandlers:
         finally:
             db.close()
 
-    def crear_usuario(self, data):
+    def create_user(self, data):
         email = data.get("email")
-        rol_str = data.get("rol")
         password = data.get("password")
+        rol = data.get("rol", "ALUMNO")
         
-        if not email or not rol_str:
-            return {"success": False, "error_message": "email y rol son requeridos"}
-            
         db = SessionLocal()
         try:
-            # Verificar si ya existe
             db_user = db.query(models.Usuario).filter(models.Usuario.email == email).first()
             if db_user:
-                return {"success": False, "error_message": "Este correo ya esta registrado"}
-                
-            # Normalizar rol
-            rol_final = None
-            for r in models.RolUsuario:
-                if rol_str.lower() == r.name.lower() or rol_str == r.value:
-                    rol_final = r
-                    break
-            
-            if not rol_final:
-                return {"success": False, "error_message": f"Rol invalido: {rol_str}"}
-                
-            # Generar password si no se provee
-            if not password:
-                alphabet = string.ascii_letters + string.digits
-                password = ''.join(secrets.choice(alphabet) for i in range(8))
-            
+                return {
+                    "success": False,
+                    "error_message": "Este correo ya esta registrado",
+                }
+
             nuevo_usuario = models.Usuario(
                 email=email,
-                password_hash=pwd_context.hash(password),
-                rol=rol_final
+                password_hash=get_password_hash(password),
+                rol=_normalize_role(rol),
             )
-            
+
             db.add(nuevo_usuario)
             db.commit()
             db.refresh(nuevo_usuario)
-            
+
             return {
                 "success": True,
                 "user": _to_user_dict(nuevo_usuario),
-                "password": password # Enviamos de vuelta el password plano para notificarlo
             }
         except Exception as e:
-            return {"success": False, "error_message": str(e)}
+            db.rollback()
+            return {
+                "success": False,
+                "error_message": str(e),
+            }
         finally:
             db.close()
 
@@ -184,7 +178,12 @@ def serve():
     server.register_action('validate_token', handlers.validate_token)
     server.register_action('get_user_by_id', handlers.get_user_by_id)
     server.register_action('check_role', handlers.check_role)
-    server.register_action('crear_usuario', handlers.crear_usuario)
+    server.register_action('create_user', handlers.create_user)
+    print("--> [RPC] Servidor Auth iniciado en rpc_auth_queue", flush=True)
+    server.start()
+
+if __name__ == "__main__":
+    serve()
     print("--> [RPC] Servidor Auth iniciado en rpc_auth_queue", flush=True)
     server.start()
 

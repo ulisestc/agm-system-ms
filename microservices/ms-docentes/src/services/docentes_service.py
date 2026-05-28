@@ -294,22 +294,37 @@ def importar_docentes_desde_pdf(contenido: bytes, db: Session) -> List[models.Do
         if fila["horario"] not in registro["horarios"]:
             registro["horarios"].append(fila["horario"])
 
-    vistos_ids = set()
+    # Pre-cargar docentes existentes para comparación normalizada
+    todos_docentes = db.query(models.Docente).all()
+    docentes_map = {_normalizar_nombre(d.nombre): d for d in todos_docentes}
+
     for fila in agrupados.values():
         nombre_docente = fila["docente_nombre"]
         if not nombre_docente:
             continue
 
-        # 1. Buscar o crear el docente
-        docente = (
-            db.query(models.Docente)
-            .filter(models.Docente.nombre == nombre_docente)
-            .first()
-        )
+        nombre_norm = _normalizar_nombre(nombre_docente)
+
+        # 1. Buscar o crear el docente en ms-docentes
+        docente = docentes_map.get(nombre_norm)
+        
         if not docente:
             docente = models.Docente(nombre=nombre_docente)
             db.add(docente)
             db.flush()   # obtenemos el id sin hacer commit todavía
+            
+            # 1.1 Registrar en Auth con email genérico o temporal si no lo tiene aún
+            username_part = re.sub(r'[^a-z0-9]', '', nombre_docente.lower())[:20]
+            temp_email = f"{username_part}@docente.buap.mx"
+            temp_clave = "password123"
+            
+            rpc_client.call('rpc_auth_queue', 'create_user', {
+                "email": temp_email,
+                "password": temp_clave,
+                "rol": "Docente"
+            })
+            
+            docentes_map[nombre_norm] = docente
 
         if docente.id not in vistos_ids:
             docentes_procesados.append(docente)
@@ -402,48 +417,82 @@ def _parsear_pagina_directorio(pagina) -> List[dict]:
             
     return registros
 
-def importar_directorio_docentes_pdf(contenido: bytes, db: Session) -> List[models.Docente]:
+from rabbitmq_manager import RabbitMQRpcClient
+import secrets
+import string
+
+def _generar_clave_unica(length=8) -> str:
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for i in range(length))
+
+import unicodedata
+
+def _normalizar_nombre(nombre: str) -> str:
+    """Normaliza un nombre: quita acentos, convierte a minúsculas y limpia espacios/puntuación."""
+    if not nombre:
+        return ""
+    # Quitar acentos
+    s = ''.join(c for c in unicodedata.normalize('NFD', nombre)
+               if unicodedata.category(c) != 'Mn')
+    # Quitar guiones y puntuación, pasar a minúsculas
+    s = re.sub(r'[^a-zA-Z\s]', ' ', s).lower()
+    # Limpiar espacios
+    return ' '.join(s.split())
+
+def importar_directorio_docentes_pdf(contenido: bytes, db: Session) -> int:
     """
     Procesa el PDF de "Personal Docente" para actualizar/crear la información de los docentes
-    (email y departamento/ubicación).
-    
-    Returns:
-        Lista de docentes procesados.
+    (email y departamento/ubicación) y los registra en MS-Auth.
     """
-    docentes_procesados = []
+    registros_importados = 0
+    rpc_client = RabbitMQRpcClient()
 
     with pdfplumber.open(BytesIO(contenido)) as pdf:
         filas = []
         for pagina in pdf.pages:
             filas.extend(_parsear_pagina_directorio(pagina))
 
+    # Pre-cargar todos los docentes para comparación normalizada
+    todos_docentes = db.query(models.Docente).all()
+    docentes_map = {_normalizar_nombre(d.nombre): d for d in todos_docentes}
+
     for fila in filas:
         nombre_docente = fila["nombre"]
         if not nombre_docente:
             continue
 
-        # 1. Buscar o crear el docente
-        docente = (
-            db.query(models.Docente)
-            .filter(models.Docente.nombre == nombre_docente)
-            .first()
-        )
+        email = fila["email"]
+        clave = "password123"
+        nombre_norm = _normalizar_nombre(nombre_docente)
+
+        # 1. Buscar el docente usando el nombre normalizado
+        docente = docentes_map.get(nombre_norm)
+        
         if not docente:
             docente = models.Docente(
                 nombre=nombre_docente,
-                email=fila["email"],
+                email=email,
                 departamento=fila["ubicacion"]
             )
             db.add(docente)
+            db.flush()
+            # Actualizar el mapa por si el mismo docente aparece de nuevo
+            docentes_map[nombre_norm] = docente
         else:
-            # Actualiza datos si ya existía y si trajo nueva información
-            # Se prioriza la nueva importación
-            if fila["email"]:
-                docente.email = fila["email"]
+            if email:
+                docente.email = email
             if fila["ubicacion"]:
                 docente.departamento = fila["ubicacion"]
         
-        docentes_procesados.append(docente)
+        # 2. Registrar en Auth
+        if email:
+            rpc_client.call('rpc_auth_queue', 'create_user', {
+                "email": email,
+                "password": "password123", # Password por defecto para docentes importados
+                "rol": "Docente"
+            })
+
+        registros_importados += 1
 
     db.commit()
     for d in docentes_procesados:

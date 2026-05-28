@@ -45,7 +45,7 @@ def send_baja_notif(alumno_data: dict, docente_data: dict, auth_token: str) -> b
         logger.error(f"Error enviando notificacion docentes.baja: {e}")
         return False
 
-def send_bienvenida_notif(alumno_data: dict, materia_nombre: str, password: str, auth_token: str) -> bool:
+def send_bienvenida_notif(alumno_data: dict, materia_nombre: str, auth_token: str, clave_unica: str = None) -> bool:
     """Publica un evento de bienvenida de alumno en RabbitMQ"""
     try:
         message = {
@@ -53,7 +53,7 @@ def send_bienvenida_notif(alumno_data: dict, materia_nombre: str, password: str,
             "alumnoNombre": alumno_data['nombre'],
             "alumnoEmail": alumno_data['email'],
             "materiaNombre": materia_nombre,
-            "claveUnica": password, 
+            "claveUnica": clave_unica if clave_unica else alumno_data['matricula'],
             "auth_token": auth_token
         }
         rabbitmq.publish_event(
