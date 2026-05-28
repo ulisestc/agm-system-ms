@@ -32,12 +32,13 @@ app.add_middleware(
 
 # Mapeo de prefijos a hosts
 SERVICES = {
-    "auth": {"host": os.getenv("MS_AUTH_HOST"), "port": 8000},
-    "periodos": {"host": os.getenv("MS_PERIODOS_HOST"), "port": 8000},
-    "docentes": {"host": os.getenv("MS_DOCENTES_HOST"), "port": 8003},
-    "calificaciones": {"host": os.getenv("MS_CALIFICACIONES_HOST"), "port": 8004},
-    "asistencias": {"host": os.getenv("MS_ASISTENCIAS_HOST"), "port": 8005},
-    "reportes": {"host": os.getenv("MS_REPORTES_HOST"), "port": 8007},
+    "auth": {"host": os.getenv("MS_AUTH_HOST"), "port": 8000, "path_prefix": ""},
+    # ms-periodos-materias expone sus endpoints bajo /api/, indicar prefijo
+    "periodos": {"host": os.getenv("MS_PERIODOS_HOST"), "port": 8000, "path_prefix": "api"},
+    "docentes": {"host": os.getenv("MS_DOCENTES_HOST"), "port": 8003, "path_prefix": ""},
+    "calificaciones": {"host": os.getenv("MS_CALIFICACIONES_HOST"), "port": 8004, "path_prefix": ""},
+    "asistencias": {"host": os.getenv("MS_ASISTENCIAS_HOST"), "port": 8005, "path_prefix": ""},
+    "reportes": {"host": os.getenv("MS_REPORTES_HOST"), "port": 8007, "path_prefix": ""},
 }
 
 client = httpx.AsyncClient()
@@ -45,6 +46,10 @@ client = httpx.AsyncClient()
 @app.get("/health")
 def health_check():
     return {"status": "ok", "message": "Gateway FastAPI is RUNNING", "port": os.getenv("PORT", "80")}
+
+@app.api_route("/api/{service}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
+async def proxy_api(request: Request, service: str, path: str):
+    return await proxy(request, service, path)
 
 @app.api_route("/{service}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
 async def proxy(request: Request, service: str, path: str):
@@ -58,7 +63,16 @@ async def proxy(request: Request, service: str, path: str):
     if not target_host:
         raise HTTPException(status_code=502, detail=f"Host faltante para: {service}")
 
-    url = f"http://{target_host}:{target_port}/{path}"
+    # Construir URL objetivo. Algunos microservicios exponen su API bajo un prefijo
+    # (p.ej. ms-periodos-materias usa '/api/'). Respetamos el prefijo definido.
+    prefix = service_config.get("path_prefix", "")
+    if prefix:
+        url = f"http://{target_host}:{target_port}/{prefix}/{path}"
+    else:
+        url = f"http://{target_host}:{target_port}/{path}"
+    # Si por accidente el frontend concatena dos veces 'api' (p.ej. /api/periodos/api/materias),
+    # colapsamos '/api/api/' a '/api/' para evitar 400 por rutas inválidas.
+    url = url.replace('/api/api/', '/api/')
     if request.query_params:
         url += f"?{request.query_params}"
 
@@ -66,15 +80,21 @@ async def proxy(request: Request, service: str, path: str):
 
     try:
         content = await request.body()
-        headers = dict(request.headers)
-        headers.pop("host", None)
+        original_headers = dict(request.headers)
+        # Filtrar y reenviar solo las cabeceras necesarias para evitar duplicados
+        allowed = ["authorization", "content-type", "accept", "user-agent", "origin", "referer", "cookie"]
+        headers = {}
+        for k, v in original_headers.items():
+            if k.lower() in allowed:
+                headers[k] = v
 
         response = await client.request(
             method=request.method,
             url=url,
             content=content,
             headers=headers,
-            timeout=15.0
+            timeout=15.0,
+            follow_redirects=True
         )
 
         return Response(

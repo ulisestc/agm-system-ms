@@ -139,6 +139,7 @@ services:
       - ./microservices/ms-periodos-materias/.env
     environment:
       - SECRET_KEY=clave_super_secreta_desarrollo_agm
+      - ALLOWED_HOSTS=localhost,127.0.0.1,ms-periodos-materias
       - DB_ENGINE=django.db.backends.postgresql
       - DB_HOST=postgres-db
       - DB_PORT=5432
@@ -179,7 +180,14 @@ services:
     container_name: agm_api_gateway
     restart: always
     ports:
-      - "80:80"
+      - "9000:8080"
+    environment:
+      - MS_AUTH_HOST=ms-auth
+      - MS_PERIODOS_HOST=ms-periodos-materias
+      - MS_DOCENTES_HOST=ms-docentes
+      - MS_CALIFICACIONES_HOST=ms-calificaciones
+      - MS_ASISTENCIAS_HOST=ms-asistencias
+      - MS_REPORTES_HOST=ms-reportes
     depends_on:
       - ms-auth
       - ms-periodos-materias
